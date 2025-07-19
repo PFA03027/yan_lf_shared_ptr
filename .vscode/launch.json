@@ -5,7 +5,7 @@
     "version": "0.2.0",
     "configurations": [
         {
-            "name": "(gdb) 起動",
+            "name": "(gdb) test_typeT_lf_heap 起動",
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/build/test/test_typeT_lf_heap",
@@ -27,7 +27,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "make BUILDTYPE=Debug test"
+            "preLaunchTask": "make BUILDTYPE=Debug build-test"
         }
     ]
 }

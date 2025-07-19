@@ -164,7 +164,7 @@ struct counter_guard {
 	{
 		decrement_then_is_zero();
 	}
-	counter_guard( void ) noexcept
+	constexpr counter_guard( void ) noexcept
 	  : p_sc_( nullptr ), is_owns_count_( false )
 	{
 	}

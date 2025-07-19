@@ -50,44 +50,44 @@ struct heap_element {
 	{
 	}
 
-	heap_element( void )
+	constexpr heap_element( void )
 	  : ap_next_ { nullptr }
 	  , p_retire_keep_next_ { nullptr }
 	  , rc_()
 	  , dummy_() {}
 
 	template <typename U = T, typename std::enable_if<std::is_copy_constructible<U>::value>::type* = nullptr>
-	value_type& store( const value_type& v_arg )
+	value_type& store( const value_type& v_arg ) noexcept( std::is_nothrow_copy_constructible<T>::value )
 	{
 		return *( new ( &v_ ) value_type( v_arg ) );
 	}
 
 	template <typename U = T, typename std::enable_if<std::is_move_constructible<U>::value>::type* = nullptr>
-	value_type& store( value_type&& v_arg )
+	value_type& store( value_type&& v_arg ) noexcept( std::is_nothrow_move_constructible<T>::value )
 	{
 		return *( new ( &v_ ) value_type( std::move( v_arg ) ) );
 	}
 
-	template <typename... Args, typename std::enable_if<std::is_constructible<value_type, Args&&...>::value>::type* = nullptr>
-	value_type& emplace( Args&&... args )
+	template <typename... Args, typename std::enable_if<std::is_constructible<T, Args&&...>::value>::type* = nullptr>
+	value_type& emplace( Args&&... args ) noexcept( std::is_nothrow_constructible<T>::value )
 	{
 		return *( new ( &v_ ) value_type( std::forward<Args>( args )... ) );
 	}
 
-	value_type load( void )
+	value_type& ref( void ) noexcept
 	{
-		if constexpr ( std::is_nothrow_move_constructible<value_type>::value ) {
-			value_type ans = std::move( v_ );
-			if constexpr ( !std::is_trivially_destructible<value_type>::value ) {
-				v_.value_type::~value_type();
-			}
-			return ans;
-		} else {
-			value_type ans = v_;
-			if constexpr ( !std::is_trivially_destructible<value_type>::value ) {
-				v_.value_type::~value_type();
-			}
-			return ans;
+		return v_;
+	}
+
+	const value_type& ref( void ) const noexcept
+	{
+		return v_;
+	}
+
+	void destruct_value( void ) noexcept
+	{
+		if constexpr ( !std::is_trivially_destructible<value_type>::value ) {
+			v_.value_type::~value_type();
 		}
 	}
 };
@@ -95,51 +95,27 @@ struct heap_element {
 }   // namespace itl
 
 template <typename T>
-struct queue_element_heap {
+struct limited_arrayheap {
 	using element_type          = itl::heap_element<T>;
 	static constexpr size_t NUM = 100;
 
-	template <typename U = T, typename std::enable_if<std::is_default_constructible<U>::value>::type* = nullptr>
 	static element_type* allocate( void )
 	{
-		element_type* p_ans = try_pop_from_free_list();
-		p_ans->store( T {} );
-		return p_ans;
-	}
-
-	template <typename U = T, typename std::enable_if<std::is_copy_constructible<U>::value>::type* = nullptr>
-	static element_type* allocate( const T& v_arg )
-	{
-		element_type* p_ans = try_pop_from_free_list();
-		if ( p_ans == nullptr ) {
-			return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
+		element_type* p_ans = try_pop_from_free();
+		if ( p_ans != nullptr ) {
+			return p_ans;
 		}
-		p_ans->store( v_arg );
+		p_ans->rc_.recycle();   // freeリストから取得したので、参照カウンタをリセットする。
 		return p_ans;
 	}
 
-	template <typename U = T, typename std::enable_if<std::is_move_constructible<U>::value>::type* = nullptr>
-	static element_type* allocate( T&& v_arg )
-	{
-		element_type* p_ans = try_pop_from_free_list();
-		if ( p_ans == nullptr ) {
-			return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
-		}
-		p_ans->store( std::move( v_arg ) );
-		return p_ans;
-	}
-
-	template <typename... Args, typename std::enable_if<std::is_constructible<T, Args&&...>::value>::type* = nullptr>
-	static element_type* emplace( Args&&... args )
-	{
-		element_type* p_ans = try_pop_from_free_list();
-		if ( p_ans == nullptr ) {
-			return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
-		}
-		p_ans->emplace( std::forward<Args>( args )... );
-		return p_ans;
-	}
-
+	/**
+	 * @brief retire element
+	 *
+	 * @pre p_elem->v_の値構築を行った場合は、destruct_value()で値を破棄していること。
+	 *
+	 * @param p_elem
+	 */
 	static void retire( element_type* p_elem )
 	{
 		if ( p_elem == nullptr ) {
@@ -147,7 +123,7 @@ struct queue_element_heap {
 		}
 		if ( p_elem->rc_.read() != 0 ) {
 			// rcがゼロになるまで待っても良いが、とりあえず、例外をスローする実装を行う。
-			throw std::logic_error( "queue_element_heap::retire() is called, but reference count is not zero." );
+			throw std::logic_error( "limited_arrayheap::retire() is called, but reference count is not zero." );
 		}
 
 		if ( auto [p_confirmed_free, idx] = try_pop_from_retired_list(); p_confirmed_free != nullptr ) {
@@ -170,16 +146,30 @@ struct queue_element_heap {
 		}
 	}
 
+	static void debug_destruction_and_regeneration( void );
+
 private:
-	static element_type* try_pop_from_free_list( void )
+	static element_type* try_pop_from_free( void )
 	{
 		auto [p_ans, idx] = try_pop_from_retired_list();
 		if ( p_ans != nullptr ) {
-			// freeリストにpushする
 			array_rc_[idx].recycle();
 			return p_ans;
 		}
 
+		p_ans = try_pop_from_free_list();
+		if ( p_ans != nullptr ) {
+			return p_ans;
+		}
+
+		// freeリストが枯渇しているので、array_heap_の未使用エリアから取得する。
+		p_ans = try_pop_from_unallocated();
+		return p_ans;
+	}
+
+	static element_type* try_pop_from_free_list( void )
+	{
+		element_type* p_ans = nullptr;
 		while ( true ) {
 			counter_guard<sticky_counter> my_rc_g;
 			while ( true ) {
@@ -189,7 +179,7 @@ private:
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
 				size_t        idx = elem_pointer_to_index( p_ans );
-				counter_guard tmp_rc_g( &( array_rc_[idx] ) );
+				counter_guard tmp_rc_g( array_rc_[idx] );
 				if ( !tmp_rc_g.owns_count() ) {
 					continue;   // タスクスイッチして、p_ansがretireまで行っていたので、やり直す。
 				}
@@ -249,42 +239,62 @@ private:
 		return std::pair<element_type*, size_t>( p_confirmed_free, idx );
 	}
 
+	static element_type* try_pop_from_unallocated( void )
+	{
+		size_t idx = watermark_of_array_.fetch_add( 1, std::memory_order_acq_rel );
+		if ( idx >= NUM ) {
+			// free要素が枯渇していることを示しているため、nullptrをreturnする。
+			// ただし、watermark_of_array_がオーバーシュートしてしまっているので、補正してからreturnする。
+			// この処理の効果によって、オーバーシュートはNUM+CPUコア数までに抑えられる。
+			watermark_of_array_.exchange( NUM, std::memory_order_release );
+			return nullptr;
+		}
+		return &( array_heap_[idx] );
+	}
+
 	static size_t elem_pointer_to_index( element_type* p_elem )
 	{
-		size_t ans = p_elem - &( array_heap_[0] );
+		if ( p_elem < &( array_heap_[0] ) ) {
+			throw std::logic_error( "argument p_elem does not belong to array_heap_" );
+		}
+
+		size_t ans = static_cast<size_t>( p_elem - &( array_heap_[0] ) );
 		if ( ans >= NUM ) {
-			// 本当はエラーログを出して無視すべきだが、いったん例外で実装する
 			throw std::logic_error( "argument p_elem does not belong to array_heap_" );
 		}
 		return ans;
 	}
 
-	static std::array<sticky_counter, NUM>       array_rc_;
-	static std::array<itl::heap_element<T>, NUM> array_heap_;
-	static std::atomic<element_type*>            ap_free_elem_head_;
-	static thread_local element_type*            p_retired_elem_head_;   // TODO: thread終了時のクリーニングは後で追加する
+	static std::array<sticky_counter, NUM>       array_rc_;              //!< reference counter for each element in array_heap_
+	static std::array<itl::heap_element<T>, NUM> array_heap_;            //!< array_heap_ for each element
+	static std::atomic<size_t>                   watermark_of_array_;    //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
+	static std::atomic<element_type*>            ap_free_elem_head_;     //!< free list head pointer
+	static thread_local element_type*            p_retired_elem_head_;   //!< thread-local variable to hold retired elements TODO: thread終了時のクリーニングは後で追加する
 };
 
 template <typename T>
-constexpr std::array<itl::heap_element<T>, queue_element_heap<T>::NUM> initialize_array_heap( void )
+constinit std::array<sticky_counter, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_rc_;
+template <typename T>
+constinit std::array<itl::heap_element<T>, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_heap_;
+template <typename T>
+std::atomic<size_t> limited_arrayheap<T>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
+template <typename T>
+constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { &( array_heap_[0] ) };
+template <typename T>
+constinit thread_local limited_arrayheap<T>::element_type* limited_arrayheap<T>::p_retired_elem_head_ { nullptr };
+
+template <typename T>
+void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 {
-	std::array<itl::heap_element<T>, queue_element_heap<T>::NUM> ans;
-	for ( size_t i = 0; i < queue_element_heap<T>::NUM - 1; i++ ) {
-		ans[i].ap_next_.store( &( ans[i + 1] ) );
+	for ( size_t i = 0; i < NUM; i++ ) {
+		array_rc_[i].recycle();
 	}
-	// 最後の要素のap_next_はすでにnullptrが設定されている。
-
-	return ans;
+	array_heap_.~array();
+	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
+	watermark_of_array_.store( 0, std::memory_order_release );
+	ap_free_elem_head_.store( &( array_heap_[0] ) );
+	p_retired_elem_head_ = nullptr;
 }
-
-template <typename T>
-constinit std::array<sticky_counter, queue_element_heap<T>::NUM> queue_element_heap<T>::array_rc_;
-template <typename T>
-constinit std::array<itl::heap_element<T>, queue_element_heap<T>::NUM> queue_element_heap<T>::array_heap_ = initialize_array_heap<T>();
-template <typename T>
-constinit std::atomic<typename queue_element_heap<T>::element_type*> queue_element_heap<T>::ap_free_elem_head_ { &( array_heap_[0] ) };
-template <typename T>
-constinit thread_local queue_element_heap<T>::element_type* queue_element_heap<T>::p_retired_elem_head_ { nullptr };
 
 }   // namespace rc
 
