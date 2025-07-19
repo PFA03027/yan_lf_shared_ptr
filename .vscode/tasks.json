@@ -4,7 +4,7 @@
 		{
 			"label": "make BUILDTYPE=Debug test",
 			"type": "shell",
-			"command": "make BUILDTYPE=Debug test",
+			"command": "make BUILDTYPE=Debug SANITIZER_TYPE=1 test",
 			"problemMatcher": [],
 			"group": {
 				"kind": "build",

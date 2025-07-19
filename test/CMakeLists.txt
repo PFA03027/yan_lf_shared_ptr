@@ -14,9 +14,9 @@ FetchContent_MakeAvailable(googletest)
 
 
 
-add_executable(test_typeT_lf_heap EXCLUDE_FROM_ALL test_rc_sticky_counter.cpp)
+add_executable(test_typeT_lf_heap EXCLUDE_FROM_ALL test_rc_sticky_counter.cpp test_limited_lf_arrayheap.cpp)
 target_include_directories( test_typeT_lf_heap  PRIVATE ../inc )
-target_compile_options(test_typeT_lf_heap PUBLIC  -Wall -Wconversion -Wsign-conversion -Werror)
+target_compile_options(test_typeT_lf_heap PUBLIC  -std=c++20 -Wall -Wconversion -Wsign-conversion -Werror)
 target_link_libraries(test_typeT_lf_heap gtest gtest_main )
 add_dependencies(build-test test_typeT_lf_heap)
 add_test(NAME test_typeT_lf_heap COMMAND $<TARGET_FILE:test_typeT_lf_heap>)
