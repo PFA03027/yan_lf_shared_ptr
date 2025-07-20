@@ -131,7 +131,7 @@ private:
 	friend limited_lf_shared_ptr<U> make_limited_lf_shared_ptr( Args&&... args );
 
 	element_type*                 p_elem_;     //!< pointer to the heap element that holds the value
-	counter_guard<sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
+	sticky_counter_guard<sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
 };
 
 template <typename T, typename... Args>

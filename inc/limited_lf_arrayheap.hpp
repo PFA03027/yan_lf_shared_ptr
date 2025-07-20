@@ -131,6 +131,10 @@ struct limited_arrayheap {
 			size_t idx = elem_pointer_to_index( p_elem );
 			if ( array_rc_[idx].is_sticky_or_recycled_zero() ) {
 				// 参照カウンタがすでにゼロに到着しているので、freeリストに戻す
+				// if ( array_rc_[idx].is_recycled_zero() ) {
+				// 	array_rc_[idx].increment_if_not_zero();    // recycled_zero_フラグを立てる
+				// 	array_rc_[idx].decrement_then_is_zero();   // recycled_zero_フラグを落とす
+				// }
 				push_to_free_list( p_elem, idx );
 			} else {
 				// 参照カウンタがまだゼロに到着していないので、スレッドローカルretireリストにpushする。
@@ -138,6 +142,11 @@ struct limited_arrayheap {
 				p_retired_elem_head_        = p_elem;
 			}
 		}
+	}
+
+	static size_t get_watermark( void )
+	{
+		return watermark_of_array_.load();
 	}
 
 	static void debug_destruction_and_regeneration( void );
@@ -165,15 +174,18 @@ private:
 	{
 		element_type* p_ans = nullptr;
 		while ( true ) {
-			counter_guard<sticky_counter> my_rc_g;
+			sticky_counter_guard<sticky_counter> my_rc_g;
 			while ( true ) {
 				p_ans = ap_free_elem_head_.load();
 				if ( p_ans == nullptr ) return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
-				size_t        idx = elem_pointer_to_index( p_ans );
-				counter_guard tmp_rc_g( array_rc_[idx] );
+				size_t idx = elem_pointer_to_index( p_ans );
+				if ( array_rc_[idx].is_sticky_zero() ) {
+					throw std::logic_error( "array_rc_[" + std::to_string( idx ) + "] is already sticky zero." );
+				}
+				sticky_counter_guard tmp_rc_g( array_rc_[idx] );
 				if ( !tmp_rc_g.owns_count() ) {
 					continue;   // タスクスイッチして、p_ansがretireまで行っていたので、やり直す。
 				}
@@ -204,12 +216,12 @@ private:
 
 	static void push_to_free_list( element_type* p_elem, size_t idx )
 	{
+		array_rc_[idx].recycle();
+
 		element_type* p_new_next = ap_free_elem_head_.load();
 		do {
 			p_elem->ap_next_.store( p_new_next, std::memory_order_release );
 		} while ( !ap_free_elem_head_.compare_exchange_strong( p_new_next, p_elem, std::memory_order_acq_rel ) );
-
-		array_rc_[idx].recycle();
 	}
 
 	static std::pair<element_type*, size_t> try_pop_from_retired_list( void )

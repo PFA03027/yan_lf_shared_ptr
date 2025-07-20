@@ -127,7 +127,7 @@ TEST( RcCounterGuard, CanConstruct )
 	rc::sticky_counter sc;
 
 	// Act
-	rc::counter_guard<rc::sticky_counter> sut( sc );
+	rc::sticky_counter_guard<rc::sticky_counter> sut( sc );
 
 	// Assert
 	EXPECT_TRUE( sut.owns_count() );
@@ -138,8 +138,8 @@ TEST( RcCounterGuard, CanConstruct )
 TEST( RcCounterGuard, CanDestruct )
 {
 	// Arrange
-	rc::sticky_counter                     sc;
-	rc::counter_guard<rc::sticky_counter>* p_sut = new rc::counter_guard<rc::sticky_counter>( sc );
+	rc::sticky_counter                            sc;
+	rc::sticky_counter_guard<rc::sticky_counter>* p_sut = new rc::sticky_counter_guard<rc::sticky_counter>( sc );
 	EXPECT_TRUE( p_sut->owns_count() );
 	EXPECT_EQ( sc.read(), 1 );
 	EXPECT_FALSE( sc.is_sticky_zero() );
@@ -155,8 +155,8 @@ TEST( RcCounterGuard, CanDestruct )
 TEST( RcCounterGuard, CanDecrementThenIsZero_ThenReturnTrue )
 {
 	// Arrange
-	rc::sticky_counter                    sc;
-	rc::counter_guard<rc::sticky_counter> sut( sc );
+	rc::sticky_counter                           sc;
+	rc::sticky_counter_guard<rc::sticky_counter> sut( sc );
 
 	// Act
 	bool result = sut.decrement_then_is_zero();
@@ -170,8 +170,8 @@ TEST( RcCounterGuard, CanDecrementThenIsZero_ThenReturnTrue )
 TEST( RcCounterGuard, StickyZero_CanDecrementThenIsZero_ThenReturnFalse )
 {
 	// Arrange
-	rc::sticky_counter                    sc;
-	rc::counter_guard<rc::sticky_counter> sut( sc );
+	rc::sticky_counter                           sc;
+	rc::sticky_counter_guard<rc::sticky_counter> sut( sc );
 	EXPECT_EQ( sc.read(), 1 );
 	sut.decrement_then_is_zero();   // Set sticky zero
 	EXPECT_EQ( sc.read(), 0 );
@@ -189,8 +189,8 @@ TEST( RcCounterGuard, StickyZero_CanDecrementThenIsZero_ThenReturnFalse )
 TEST( RcCounterGuard, StickyZero_CanDestruct_ThenKeepStickyZero )
 {
 	// Arrange
-	rc::sticky_counter                     sc;
-	rc::counter_guard<rc::sticky_counter>* p_sut = new rc::counter_guard<rc::sticky_counter>( sc );
+	rc::sticky_counter                            sc;
+	rc::sticky_counter_guard<rc::sticky_counter>* p_sut = new rc::sticky_counter_guard<rc::sticky_counter>( sc );
 	EXPECT_EQ( sc.read(), 1 );
 	p_sut->decrement_then_is_zero();   // Set sticky zero
 	EXPECT_EQ( sc.read(), 0 );

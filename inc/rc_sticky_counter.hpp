@@ -23,6 +23,8 @@
 #ifndef RC_STICKY_COUNTER_HPP_
 #define RC_STICKY_COUNTER_HPP_
 
+#include <cstdlib>
+
 #include <atomic>
 #include <cstdint>
 #include <limits>
@@ -50,10 +52,19 @@ struct basic_sticky_counter {
 	{
 		rc_type pre_value = counter_.fetch_add( 1, std::memory_order_acq_rel );
 		bool    ans       = ( ( pre_value & is_zero_ ) == 0 );
-		if ( ans && ( ( pre_value & recycled_zero_ ) != 0 ) ) {
-			pre_value++;   // recycled_zero_フラグが立っている場合は、0->1への変化した状況のため、recycled_zero_フラグを落とす準備をする。
-			// recycled_zero_ -> recycled_zero_ + 1への変化した状況のなので、recycled_zero_フラグを落とす。
-			counter_.compare_exchange_strong( pre_value, pre_value & ( ~recycled_zero_ ), std::memory_order_acq_rel );
+		if ( ans ) {
+			if ( pre_value == recycled_zero_ ) {
+				// recycled_zero_ -> recycled_zero_ + 1への変化したを獲得したスレッドなので、recycled_zero_フラグを落とす。
+				rc_type pre_value2 = counter_.fetch_and( ~recycled_zero_, std::memory_order_acq_rel );
+				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
+					exit( 1 );   // ここに来ることはないはず。デバッグ用のexit
+				}
+			}
+		} else {
+			// ゼロフラグが立っていた場合、加算を差し戻す。
+			// 現実的には、この処理を行わなくても、オーバーフローすることはないが、論理的には起きうる。
+			// そのため、静的解析ツールなどが警告を出すかもしれない。それが、うるさいので、差し戻す処理を用意する。
+			counter_.fetch_sub( 1, std::memory_order_acq_rel );
 		}
 		return ans;
 	}
@@ -156,7 +167,6 @@ struct basic_sticky_counter {
 	 *
 	 * @warning
 	 * 事前条件が守られない場合、stickyではなくなってしまう。
-	 * 例えば、
 	 */
 	void recycle( void ) noexcept
 	{
@@ -182,21 +192,21 @@ private:
  * @tparam SC
  */
 template <typename SC>
-struct counter_guard {
-	~counter_guard()
+struct sticky_counter_guard {
+	~sticky_counter_guard()
 	{
 		decrement_then_is_zero();
 	}
-	constexpr counter_guard( void ) noexcept
+	constexpr sticky_counter_guard( void ) noexcept
 	  : p_sc_( nullptr ), is_owns_count_( false )
 	{
 	}
-	counter_guard( const counter_guard& src ) noexcept
+	sticky_counter_guard( const sticky_counter_guard& src ) noexcept
 	  : p_sc_( src.p_sc_ )
 	  , is_owns_count_( ( p_sc_ != nullptr ) ? p_sc_->increment_if_not_zero() : false )
 	{
 	}
-	counter_guard( counter_guard&& src ) noexcept
+	sticky_counter_guard( sticky_counter_guard&& src ) noexcept
 	  : p_sc_( src.p_sc_ )
 	  , is_owns_count_( src.is_owns_count_ )
 	{
@@ -204,7 +214,7 @@ struct counter_guard {
 		src.is_owns_count_ = false;
 	}
 
-	counter_guard& operator=( const counter_guard& src ) noexcept
+	sticky_counter_guard& operator=( const sticky_counter_guard& src ) noexcept
 	{
 		if ( this == &src ) {
 			return *this;   // Handle self-assignment
@@ -232,7 +242,7 @@ struct counter_guard {
 		return *this;
 	}
 
-	counter_guard& operator=( counter_guard&& src ) noexcept
+	sticky_counter_guard& operator=( sticky_counter_guard&& src ) noexcept
 	{
 		if ( this == &src ) {
 			return *this;   // Handle self-assignment
@@ -246,12 +256,12 @@ struct counter_guard {
 		return *this;
 	}
 
-	explicit counter_guard( SC& sc_ref ) noexcept
+	explicit sticky_counter_guard( SC& sc_ref ) noexcept
 	  : p_sc_( &sc_ref ), is_owns_count_( p_sc_->increment_if_not_zero() )
 	{
 	}
 
-	void swap( counter_guard& other ) noexcept
+	void swap( sticky_counter_guard& other ) noexcept
 	{
 		std::swap( p_sc_, other.p_sc_ );
 		std::swap( is_owns_count_, other.is_owns_count_ );
