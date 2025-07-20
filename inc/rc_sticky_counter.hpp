@@ -291,6 +291,75 @@ private:
 
 using sticky_counter = basic_sticky_counter<uint64_t>;
 
+/**
+ * @brief counter guard for integral type atomic variable.
+ *
+ * @tparam IAV integral type atomic variable
+ */
+template <typename IAV>
+class counter_guard {
+public:
+	~counter_guard()
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_sub( 1, std::memory_order_acq_rel );
+	}
+	constexpr counter_guard( void ) noexcept
+	  : p_counter_( nullptr )
+	{
+	}
+
+	counter_guard( const counter_guard& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_add( 1, std::memory_order_acq_rel );
+	}
+
+	counter_guard( counter_guard&& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		src.p_counter_ = nullptr;   // reset source pointer to avoid double decrement
+	}
+
+	counter_guard& operator=( const counter_guard& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( src ).swap( *this );   // Use copy-and-swap idiom for exception safety
+		return *this;
+	}
+	counter_guard& operator=( counter_guard&& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( std::move( src ) ).swap( *this );   // Use move-and-swap idiom for exception safety
+		return *this;
+	}
+
+	explicit counter_guard( IAV& iav_ref ) noexcept
+	  : p_counter_( &iav_ref )
+	{
+		p_counter_->fetch_add( 1, std::memory_order_acq_rel );
+	}
+
+	void swap( counter_guard& other ) noexcept
+	{
+		std::swap( p_counter_, other.p_counter_ );
+	}
+
+private:
+	IAV* p_counter_;   //!< pointer to integral type atomic variable
+};
+
 }   // namespace rc
 
 #endif

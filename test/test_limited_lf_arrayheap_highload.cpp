@@ -18,11 +18,11 @@
 
 #include <gtest/gtest.h>
 
-#if 0
+#if 1
 TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 {
 	// Arrange
-	constexpr size_t  NUM_THREADS = 2;
+	constexpr size_t  NUM_THREADS = 20;
 	std::atomic<bool> done { false };
 
 	// Act
@@ -52,11 +52,15 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 	for ( auto& t : threads ) {
 		t.join();
 	}
+	size_t total_count = 0;
 	for ( auto& r : results ) {
 		size_t ret_count;
 		EXPECT_NO_THROW( ret_count = r.get() );
 		EXPECT_GT( ret_count, 0 );   // 各スレッドが少なくとも1つの要素を処理したことを確認する
+		total_count += ret_count;
 	}
+	std::cout << "Total elements processed: " << total_count << std::endl;
+	std::cout << "Watermark after high load: " << rc::limited_arrayheap<int>::get_watermark() << std::endl;
 	EXPECT_LT( rc::limited_arrayheap<int>::get_watermark(), rc::limited_arrayheap<int>::NUM );
 }
 #endif

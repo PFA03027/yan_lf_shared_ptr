@@ -97,7 +97,7 @@ struct heap_element {
 template <typename T>
 struct limited_arrayheap {
 	using element_type          = itl::heap_element<T>;
-	static constexpr size_t NUM = 100;
+	static constexpr size_t NUM = 10000;
 
 	static element_type* allocate( void )
 	{
@@ -129,12 +129,8 @@ struct limited_arrayheap {
 
 		{
 			size_t idx = elem_pointer_to_index( p_elem );
-			if ( array_rc_[idx].is_sticky_or_recycled_zero() ) {
+			if ( array_rc_[idx].load( std::memory_order_acquire ) == 0 ) {
 				// 参照カウンタがすでにゼロに到着しているので、freeリストに戻す
-				// if ( array_rc_[idx].is_recycled_zero() ) {
-				// 	array_rc_[idx].increment_if_not_zero();    // recycled_zero_フラグを立てる
-				// 	array_rc_[idx].decrement_then_is_zero();   // recycled_zero_フラグを落とす
-				// }
 				push_to_free_list( p_elem, idx );
 			} else {
 				// 参照カウンタがまだゼロに到着していないので、スレッドローカルretireリストにpushする。
@@ -156,7 +152,7 @@ private:
 	{
 		auto [p_ans, idx] = try_pop_from_retired_list();
 		if ( p_ans != nullptr ) {
-			array_rc_[idx].recycle();
+			array_rc_[idx].store( 0, std::memory_order_release );   // reset reference counter
 			return p_ans;
 		}
 
@@ -174,21 +170,15 @@ private:
 	{
 		element_type* p_ans = nullptr;
 		while ( true ) {
-			sticky_counter_guard<sticky_counter> my_rc_g;
+			counter_guard<std::atomic<size_t>> my_rc_g;
 			while ( true ) {
 				p_ans = ap_free_elem_head_.load();
 				if ( p_ans == nullptr ) return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
-				size_t idx = elem_pointer_to_index( p_ans );
-				if ( array_rc_[idx].is_sticky_zero() ) {
-					throw std::logic_error( "array_rc_[" + std::to_string( idx ) + "] is already sticky zero." );
-				}
-				sticky_counter_guard tmp_rc_g( array_rc_[idx] );
-				if ( !tmp_rc_g.owns_count() ) {
-					continue;   // タスクスイッチして、p_ansがretireまで行っていたので、やり直す。
-				}
+				size_t        idx = elem_pointer_to_index( p_ans );
+				counter_guard tmp_rc_g( array_rc_[idx] );
 				// ここで、reference countの確保完了。
 
 				// p_ansがまだ有効かどうかを検証する。
@@ -216,7 +206,7 @@ private:
 
 	static void push_to_free_list( element_type* p_elem, size_t idx )
 	{
-		array_rc_[idx].recycle();
+		array_rc_[idx].store( 0, std::memory_order_release );   // reset reference counter
 
 		element_type* p_new_next = ap_free_elem_head_.load();
 		do {
@@ -232,7 +222,7 @@ private:
 		}
 
 		size_t idx = elem_pointer_to_index( p_retired_elem_head_ );
-		if ( !array_rc_[idx].is_sticky_zero() ) {
+		if ( array_rc_[idx].load( std::memory_order_acquire ) != 0 ) {
 			// まだ参照しているスレッドがいるので、取り出せない。
 			return std::pair<element_type*, size_t>( nullptr, 0 );
 		}
@@ -273,7 +263,7 @@ private:
 		return ans;
 	}
 
-	static std::array<sticky_counter, NUM>       array_rc_;              //!< reference counter for each element in array_heap_
+	static std::array<std::atomic<size_t>, NUM>  array_rc_;              //!< reference counter for each element in array_heap_
 	static std::array<itl::heap_element<T>, NUM> array_heap_;            //!< array_heap_ for each element
 	static std::atomic<size_t>                   watermark_of_array_;    //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
 	static std::atomic<element_type*>            ap_free_elem_head_;     //!< free list head pointer
@@ -281,7 +271,7 @@ private:
 };
 
 template <typename T>
-constinit std::array<sticky_counter, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_rc_;
+constinit std::array<std::atomic<size_t>, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_rc_;
 template <typename T>
 constinit std::array<itl::heap_element<T>, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_heap_;
 template <typename T>
@@ -295,7 +285,7 @@ template <typename T>
 void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 {
 	for ( size_t i = 0; i < NUM; i++ ) {
-		array_rc_[i].recycle();
+		array_rc_[i].store( 0, std::memory_order_release );   // reset reference counter
 	}
 	array_heap_.~array();
 	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
