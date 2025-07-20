@@ -21,6 +21,7 @@
  */
 
 #ifndef RC_STICKY_COUNTER_HPP_
+#define RC_STICKY_COUNTER_HPP_
 
 #include <atomic>
 #include <cstdint>
@@ -125,6 +126,17 @@ struct basic_sticky_counter {
 	}
 
 	/**
+	 * @brief read counter value
+	 *
+	 * @return rc_type counter value
+	 */
+	bool is_recycled_zero( void ) const noexcept
+	{
+		rc_type val = counter_.load( std::memory_order_acquire );
+		return val == recycled_zero_;
+	}
+
+	/**
 	 * @brief 再利用するために、カウンタの状態を初期化しなおす。
 	 *
 	 * @pre
@@ -169,14 +181,58 @@ struct counter_guard {
 	{
 	}
 	counter_guard( const counter_guard& src ) noexcept
-	  : p_sc_( src.p_sc_ ), is_owns_count_( ( p_sc_ != nullptr ) ? p_sc_->increment_if_not_zero() : false )
+	  : p_sc_( src.p_sc_ )
+	  , is_owns_count_( ( p_sc_ != nullptr ) ? p_sc_->increment_if_not_zero() : false )
 	{
 	}
 	counter_guard( counter_guard&& src ) noexcept
-	  : p_sc_( src.p_sc_ ), is_owns_count_( src.is_owns_count_ )
+	  : p_sc_( src.p_sc_ )
+	  , is_owns_count_( src.is_owns_count_ )
 	{
 		src.p_sc_          = nullptr;
 		src.is_owns_count_ = false;
+	}
+
+	counter_guard& operator=( const counter_guard& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+		if ( p_sc_ == src.p_sc_ ) {
+			if ( p_sc_ != nullptr ) {
+				if ( src.is_owns_count_ ) {
+					if ( !is_owns_count_ ) {
+						is_owns_count_ = p_sc_->increment_if_not_zero();
+					}
+				} else {
+					decrement_then_is_zero();   // Clean up current state
+				}
+			}
+			return *this;   // nothing to do
+		}
+
+		decrement_then_is_zero();   // Clean up current state
+
+		p_sc_          = src.p_sc_;
+		is_owns_count_ = src.is_owns_count_;
+		if ( ( p_sc_ != nullptr ) && is_owns_count_ ) {
+			is_owns_count_ = p_sc_->increment_if_not_zero();
+		}
+		return *this;
+	}
+
+	counter_guard& operator=( counter_guard&& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+		decrement_then_is_zero();   // Clean up current state
+
+		p_sc_              = src.p_sc_;
+		is_owns_count_     = src.is_owns_count_;
+		src.p_sc_          = nullptr;
+		src.is_owns_count_ = false;
+		return *this;
 	}
 
 	explicit counter_guard( SC& sc_ref ) noexcept

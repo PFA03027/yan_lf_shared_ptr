@@ -101,12 +101,7 @@ struct limited_arrayheap {
 
 	static element_type* allocate( void )
 	{
-		element_type* p_ans = try_pop_from_free();
-		if ( p_ans != nullptr ) {
-			return p_ans;
-		}
-		p_ans->rc_.recycle();   // freeリストから取得したので、参照カウンタをリセットする。
-		return p_ans;
+		return try_pop_from_free();
 	}
 
 	/**
@@ -118,6 +113,11 @@ struct limited_arrayheap {
 	 */
 	static void retire( element_type* p_elem )
 	{
+		if ( auto [p_confirmed_free, idx] = try_pop_from_retired_list(); p_confirmed_free != nullptr ) {
+			// freeリストにpushする
+			push_to_free_list( p_confirmed_free, idx );
+		}
+
 		if ( p_elem == nullptr ) {
 			return;
 		}
@@ -126,18 +126,11 @@ struct limited_arrayheap {
 			throw std::logic_error( "limited_arrayheap::retire() is called, but reference count is not zero." );
 		}
 
-		if ( auto [p_confirmed_free, idx] = try_pop_from_retired_list(); p_confirmed_free != nullptr ) {
-			// freeリストにpushする
-			push_to_free_list( p_confirmed_free );
-			array_rc_[idx].recycle();
-		}
-
 		{
 			size_t idx = elem_pointer_to_index( p_elem );
 			if ( array_rc_[idx].is_sticky_zero() ) {
 				// 参照カウンタがすでにゼロに到着しているので、freeリストに戻す
-				push_to_free_list( p_elem );
-				array_rc_[idx].recycle();
+				push_to_free_list( p_elem, idx );
 			} else {
 				// 参照カウンタがまだゼロに到着していないので、スレッドローカルretireリストにpushする。
 				p_elem->p_retire_keep_next_ = p_retired_elem_head_;
@@ -208,12 +201,14 @@ private:
 		return p_ans;
 	}
 
-	static void push_to_free_list( element_type* p_elem )
+	static void push_to_free_list( element_type* p_elem, size_t idx )
 	{
 		element_type* p_new_next = ap_free_elem_head_.load();
 		do {
 			p_elem->ap_next_.store( p_new_next, std::memory_order_release );
 		} while ( !ap_free_elem_head_.compare_exchange_strong( p_new_next, p_elem, std::memory_order_acq_rel ) );
+
+		array_rc_[idx].recycle();
 	}
 
 	static std::pair<element_type*, size_t> try_pop_from_retired_list( void )
@@ -279,7 +274,7 @@ constinit std::array<itl::heap_element<T>, limited_arrayheap<T>::NUM> limited_ar
 template <typename T>
 std::atomic<size_t> limited_arrayheap<T>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
 template <typename T>
-constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { &( array_heap_[0] ) };
+constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { nullptr };
 template <typename T>
 constinit thread_local limited_arrayheap<T>::element_type* limited_arrayheap<T>::p_retired_elem_head_ { nullptr };
 
@@ -292,29 +287,10 @@ void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 	array_heap_.~array();
 	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
 	watermark_of_array_.store( 0, std::memory_order_release );
-	ap_free_elem_head_.store( &( array_heap_[0] ) );
+	ap_free_elem_head_.store( nullptr, std::memory_order_release );
 	p_retired_elem_head_ = nullptr;
 }
 
 }   // namespace rc
 
-#endif
-
-#if 0
-int main( void )
-{
-	auto p_sut = new sticky_counter;
-	auto ret   = p_sut->increment_if_not_zero();
-	std::cout << std::boolalpha << ret << std::endl;
-	std::cout << p_sut->read() << std::endl;
-	ret = p_sut->decrement_then_is_zero();
-	std::cout << std::boolalpha << ret << std::endl;
-	std::cout << p_sut->read() << std::endl;
-	std::cout << std::boolalpha << p_sut->is_sticky_zero() << std::endl;
-	delete p_sut;
-
-	queue_element<int> sut_qe;
-
-	return 0;
-}
 #endif
