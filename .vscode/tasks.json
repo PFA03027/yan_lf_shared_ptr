@@ -2,7 +2,7 @@
 	"version": "2.0.0",
 	"tasks": [
 		{
-			"label": "make BUILDTYPE=Debug test",
+			"label": "make BUILDTYPE=Debug test with address sanitizer",
 			"type": "shell",
 			"command": "make BUILDTYPE=Debug SANITIZER_TYPE=1 test",
 			"problemMatcher": [],
@@ -12,9 +12,19 @@
 			}
 		},
 		{
-			"label": "make BUILDTYPE=Debug build-test",
+			"label": "make BUILDTYPE=Debug build-test with address sanitizer",
 			"type": "shell",
 			"command": "make BUILDTYPE=Debug SANITIZER_TYPE=1 build-test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "make BUILDTYPE=Debug build-test without sanitizer",
+			"type": "shell",
+			"command": "make BUILDTYPE=Debug build-test",
 			"problemMatcher": [],
 			"group": {
 				"kind": "build",

@@ -27,7 +27,7 @@
                     "ignoreFailures": true
                 }
             ],
-            "preLaunchTask": "make BUILDTYPE=Debug build-test"
+            "preLaunchTask": "make BUILDTYPE=Debug build-test without sanitizer"
         }
     ]
 }

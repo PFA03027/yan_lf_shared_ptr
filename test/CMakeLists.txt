@@ -12,8 +12,9 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+add_custom_target(build-test)
 
-set(EXEC_TARGET test_profile_special)
+set(EXEC_TARGET test_typeT_lf_heap)
 file(GLOB SOURCES *.cpp )
 
 add_executable(${EXEC_TARGET} EXCLUDE_FROM_ALL ${SOURCES})

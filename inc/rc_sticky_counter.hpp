@@ -137,6 +137,17 @@ struct basic_sticky_counter {
 	}
 
 	/**
+	 * @brief read counter value
+	 *
+	 * @return rc_type counter value
+	 */
+	bool is_sticky_or_recycled_zero( void ) const noexcept
+	{
+		rc_type val = counter_.load( std::memory_order_acquire );
+		return ( val & ( is_zero_ | recycled_zero_ ) ) != 0;
+	}
+
+	/**
 	 * @brief 再利用するために、カウンタの状態を初期化しなおす。
 	 *
 	 * @pre

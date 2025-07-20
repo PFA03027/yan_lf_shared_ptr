@@ -121,14 +121,15 @@ struct limited_arrayheap {
 		if ( p_elem == nullptr ) {
 			return;
 		}
-		if ( p_elem->rc_.read() != 0 ) {
+		if ( !p_elem->rc_.is_sticky_or_recycled_zero() ) {
 			// rcがゼロになるまで待っても良いが、とりあえず、例外をスローする実装を行う。
 			throw std::logic_error( "limited_arrayheap::retire() is called, but reference count is not zero." );
 		}
+		p_elem->rc_.recycle();   // recycle the sticky counter
 
 		{
 			size_t idx = elem_pointer_to_index( p_elem );
-			if ( array_rc_[idx].is_sticky_zero() ) {
+			if ( array_rc_[idx].is_sticky_or_recycled_zero() ) {
 				// 参照カウンタがすでにゼロに到着しているので、freeリストに戻す
 				push_to_free_list( p_elem, idx );
 			} else {
