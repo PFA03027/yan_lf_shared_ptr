@@ -116,7 +116,7 @@ struct limited_arrayheap {
 	 */
 	static void retire( element_type* p_elem )
 	{
-		if ( auto [p_confirmed_free, idx] = try_pop_from_retired_list(); p_confirmed_free != nullptr ) {
+		if ( auto [p_confirmed_free, idx] = retired_elem_list_.check_and_pop(); p_confirmed_free != nullptr ) {
 			// freeリストにpushする
 			push_to_free_list( p_confirmed_free, idx );
 		}
@@ -137,7 +137,7 @@ struct limited_arrayheap {
 				push_to_free_list( p_elem, idx );
 			} else {
 				// 参照カウンタがまだゼロに到着していないので、スレッドローカルretireリストにpushする。
-				push_to_retired_list( p_elem );
+				retired_elem_list_.push( p_elem );
 			}
 		}
 	}
@@ -150,9 +150,59 @@ struct limited_arrayheap {
 	static void debug_destruction_and_regeneration( void );
 
 private:
+	class retired_fifo_list {
+	public:
+		constexpr retired_fifo_list( void )
+		  : p_head_( nullptr )
+		  , p_tail_( nullptr )
+		{
+		}
+
+		void push( element_type* p_elem ) noexcept
+		{
+			if ( p_tail_ == nullptr ) {
+				p_head_ = p_tail_           = p_elem;
+				p_elem->p_retire_keep_next_ = nullptr;
+			} else {
+				p_elem->p_retire_keep_next_  = nullptr;
+				p_tail_->p_retire_keep_next_ = p_elem;
+				p_tail_                      = p_elem;
+			}
+		}
+
+		std::pair<element_type*, size_t> check_and_pop( void ) noexcept
+		{
+			if ( p_head_ == nullptr ) {
+				return std::pair<element_type*, size_t>( nullptr, 0 );
+			}
+
+			size_t idx = elem_pointer_to_index( p_head_ );
+			if ( array_rc_[idx].load( /* std::memory_order_acquire */ ) != 0 ) {
+				// まだ参照しているスレッドがいるので、取り出せない。
+				return std::pair<element_type*, size_t>( nullptr, 0 );
+			}
+
+			element_type* p_elem = p_head_;
+			p_head_              = p_elem->p_retire_keep_next_;
+			if ( p_head_ == nullptr ) {
+				p_tail_ = nullptr;   // list is now empty
+			}
+			return std::pair<element_type*, size_t>( p_elem, idx );
+		}
+
+		void clear( void ) noexcept
+		{
+			p_head_ = p_tail_ = nullptr;   // Clear the list
+		}
+
+	private:
+		element_type* p_head_;   //!< pointer to head of retired list
+		element_type* p_tail_;   //!< pointer to tail of retired list
+	};
+
 	static element_type* try_pop_from_free( void )
 	{
-		auto [p_ans, idx] = try_pop_from_retired_list();
+		auto [p_ans, idx] = retired_elem_list_.check_and_pop();
 		if ( p_ans != nullptr ) {
 			p_ans->debug_info_ = 2;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
@@ -228,35 +278,6 @@ private:
 #endif
 	}
 
-	static std::pair<element_type*, size_t> try_pop_from_retired_list( void )
-	{
-		// スレッドローカルretireリストをチェックする
-		if ( p_retired_elem_head_ == nullptr ) {
-			return std::pair<element_type*, size_t>( nullptr, 0 );
-		}
-
-		size_t idx = elem_pointer_to_index( p_retired_elem_head_ );
-		if ( array_rc_[idx].load( /* std::memory_order_acquire */ ) != 0 ) {
-			// まだ参照しているスレッドがいるので、取り出せない。
-			return std::pair<element_type*, size_t>( nullptr, 0 );
-		}
-
-		// 参照カウンタがゼロに到着しているので、retiredリストから取り出す。
-		element_type* p_confirmed_free = p_retired_elem_head_;
-		element_type* p_retired_next   = p_retired_elem_head_->p_retire_keep_next_;
-		p_retired_elem_head_           = p_retired_next;
-
-		// nextをクリア
-		p_confirmed_free->p_retire_keep_next_ = nullptr;
-		return std::pair<element_type*, size_t>( p_confirmed_free, idx );
-	}
-
-	static void push_to_retired_list( element_type* p_elem )
-	{
-		p_elem->p_retire_keep_next_ = p_retired_elem_head_;
-		p_retired_elem_head_        = p_elem;
-	}
-
 	static element_type* try_pop_from_unallocated( void )
 	{
 		size_t idx = watermark_of_array_.fetch_add( 1 );
@@ -283,11 +304,11 @@ private:
 		return ans;
 	}
 
-	static std::array<std::atomic<size_t>, NUM>  array_rc_;              //!< reference counter for each element in array_heap_
-	static std::array<itl::heap_element<T>, NUM> array_heap_;            //!< array_heap_ for each element
-	static std::atomic<size_t>                   watermark_of_array_;    //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
-	static std::atomic<element_type*>            ap_free_elem_head_;     //!< free list head pointer
-	static thread_local element_type*            p_retired_elem_head_;   //!< thread-local variable to hold retired elements TODO: thread終了時のクリーニングは後で追加する
+	static std::array<std::atomic<size_t>, NUM>  array_rc_;             //!< reference counter for each element in array_heap_
+	static std::array<itl::heap_element<T>, NUM> array_heap_;           //!< array_heap_ for each element
+	static std::atomic<size_t>                   watermark_of_array_;   //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
+	static std::atomic<element_type*>            ap_free_elem_head_;    //!< free list head pointer
+	static thread_local retired_fifo_list        retired_elem_list_;    //!< thread-local variable to hold retired elements TODO: thread終了時のクリーニングは後で追加する
 };
 
 template <typename T>
@@ -299,7 +320,7 @@ std::atomic<size_t> limited_arrayheap<T>::watermark_of_array_ { 0 };   //<! wate
 template <typename T>
 constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { nullptr };
 template <typename T>
-constinit thread_local limited_arrayheap<T>::element_type* limited_arrayheap<T>::p_retired_elem_head_ { nullptr };
+constinit thread_local limited_arrayheap<T>::retired_fifo_list limited_arrayheap<T>::retired_elem_list_;
 
 template <typename T>
 void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
@@ -311,7 +332,7 @@ void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
 	watermark_of_array_.store( 0 /* , std::memory_order_release */ );
 	ap_free_elem_head_.store( nullptr /* , std::memory_order_release */ );
-	p_retired_elem_head_ = nullptr;
+	retired_elem_list_.clear();
 }
 
 }   // namespace rc
