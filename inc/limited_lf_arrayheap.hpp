@@ -16,6 +16,7 @@
 #include <atomic>
 #include <cstdint>
 #include <limits>
+#include <mutex>
 #include <stdexcept>
 #include <type_traits>
 
@@ -116,9 +117,12 @@ struct limited_arrayheap {
 	 */
 	static void retire( element_type* p_elem )
 	{
-		if ( auto [p_confirmed_free, idx] = retired_elem_list_.check_and_pop(); p_confirmed_free != nullptr ) {
-			// freeリストにpushする
-			push_to_free_list( p_confirmed_free, idx );
+		{
+			auto [p_confirmed_free, idx] = try_pop_from_retired_list();
+			if ( p_confirmed_free != nullptr ) {
+				// freeリストにpushする
+				push_to_free_list( p_confirmed_free, idx );
+			}
 		}
 
 		if ( p_elem == nullptr ) {
@@ -178,7 +182,8 @@ private:
 
 			size_t idx = elem_pointer_to_index( p_head_ );
 			if ( array_rc_[idx].load( /* std::memory_order_acquire */ ) != 0 ) {
-				// まだ参照しているスレッドがいるので、取り出せない。
+				// まだ参照しているスレッドがいるので、取り出せない。再度すぐにチェックするのは無駄なので、FIFOキューの後ろに回す。
+				push( pop() );
 				return std::pair<element_type*, size_t>( nullptr, 0 );
 			}
 
@@ -195,14 +200,55 @@ private:
 			p_head_ = p_tail_ = nullptr;   // Clear the list
 		}
 
+		void merge( retired_fifo_list& other ) noexcept
+		{
+			if ( this == &other ) {
+				return;   // nothing to merge with itself
+			}
+			if ( other.p_head_ == nullptr ) {
+				return;   // nothing to merge
+			}
+			if ( p_tail_ == nullptr ) {
+				p_head_ = other.p_head_;
+				p_tail_ = other.p_tail_;
+			} else {
+				p_tail_->p_retire_keep_next_ = other.p_head_;
+				p_tail_                      = other.p_tail_;
+			}
+			other.clear();   // Clear the other list after merging
+		}
+
 	private:
+		element_type* pop( void )
+		{
+			// precondition: p_head_ is not nullptr
+
+			element_type* p_elem = p_head_;
+			p_head_              = p_elem->p_retire_keep_next_;
+			if ( p_head_ == nullptr ) {
+				p_tail_ = nullptr;   // list is now empty
+			}
+			return p_elem;
+		}
+
 		element_type* p_head_;   //!< pointer to head of retired list
 		element_type* p_tail_;   //!< pointer to tail of retired list
 	};
 
+	class thread_local_retired_fifo_list_cleaner {
+	public:
+		thread_local_retired_fifo_list_cleaner( void ) = default;
+
+		~thread_local_retired_fifo_list_cleaner( void )
+		{
+			std::lock_guard<std::mutex> lock( primary_retired_elem_list_mtx_ );
+			primary_retired_elem_list_.merge( retired_elem_list_ );   // Merge the thread-local retired elements list into the primary list
+		}
+	};
+
 	static element_type* try_pop_from_free( void )
 	{
-		auto [p_ans, idx] = retired_elem_list_.check_and_pop();
+		auto [p_ans, idx] = try_pop_from_retired_list();
 		if ( p_ans != nullptr ) {
 			p_ans->debug_info_ = 2;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
@@ -278,6 +324,19 @@ private:
 #endif
 	}
 
+	static std::pair<element_type*, size_t> try_pop_from_retired_list( void )
+	{
+		std::pair<element_type*, size_t> ans = retired_elem_list_.check_and_pop();
+		if ( ans.first == nullptr ) {
+			std::unique_lock<std::mutex> lock( primary_retired_elem_list_mtx_, std::try_to_lock );
+			if ( lock.owns_lock() ) {
+				ans = primary_retired_elem_list_.check_and_pop();
+			}
+		}
+
+		return ans;
+	}
+
 	static element_type* try_pop_from_unallocated( void )
 	{
 		size_t idx = watermark_of_array_.fetch_add( 1 );
@@ -304,11 +363,14 @@ private:
 		return ans;
 	}
 
-	static std::array<std::atomic<size_t>, NUM>  array_rc_;             //!< reference counter for each element in array_heap_
-	static std::array<itl::heap_element<T>, NUM> array_heap_;           //!< array_heap_ for each element
-	static std::atomic<size_t>                   watermark_of_array_;   //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
-	static std::atomic<element_type*>            ap_free_elem_head_;    //!< free list head pointer
-	static thread_local retired_fifo_list        retired_elem_list_;    //!< thread-local variable to hold retired elements TODO: thread終了時のクリーニングは後で追加する
+	static std::array<std::atomic<size_t>, NUM>                array_rc_;                        //!< reference counter for each element in array_heap_
+	static std::array<itl::heap_element<T>, NUM>               array_heap_;                      //!< array_heap_ for each element
+	static std::atomic<size_t>                                 watermark_of_array_;              //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
+	static std::atomic<element_type*>                          ap_free_elem_head_;               //!< free list head pointer
+	static thread_local retired_fifo_list                      retired_elem_list_;               //!< thread-local variable to hold retired elements
+	static std::mutex                                          primary_retired_elem_list_mtx_;   //!< mutex for primary retired elements list
+	static retired_fifo_list                                   primary_retired_elem_list_;       //!< primary retired elements list
+	static thread_local thread_local_retired_fifo_list_cleaner tl_retired_fifo_list_cleaner_;    //!< thread-local cleaner for retired elements list
 };
 
 template <typename T>
@@ -319,6 +381,11 @@ template <typename T>
 std::atomic<size_t> limited_arrayheap<T>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
 template <typename T>
 constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { nullptr };
+
+template <typename T>
+constinit std::mutex limited_arrayheap<T>::primary_retired_elem_list_mtx_;
+template <typename T>
+constinit limited_arrayheap<T>::retired_fifo_list limited_arrayheap<T>::primary_retired_elem_list_;
 template <typename T>
 constinit thread_local limited_arrayheap<T>::retired_fifo_list limited_arrayheap<T>::retired_elem_list_;
 
@@ -333,6 +400,11 @@ void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 	watermark_of_array_.store( 0 /* , std::memory_order_release */ );
 	ap_free_elem_head_.store( nullptr /* , std::memory_order_release */ );
 	retired_elem_list_.clear();
+
+	{
+		std::lock_guard<std::mutex> lock( primary_retired_elem_list_mtx_ );
+		primary_retired_elem_list_.clear();   // Clear the primary retired elements list
+	}
 }
 
 }   // namespace rc
