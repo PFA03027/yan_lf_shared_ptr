@@ -11,6 +11,7 @@
 
 #ifndef LIMITED_LF_SHARED_PTR_HPP_
 #define LIMITED_LF_SHARED_PTR_HPP_
+
 #include "limited_lf_arrayheap.hpp"
 #include "rc_sticky_counter.hpp"
 
@@ -62,6 +63,17 @@ public:
 
 		limited_lf_shared_ptr( std::move( other ) ).swap( *this );   // Use move-and-swap idiom for exception safety
 		return *this;
+	}
+
+	limited_lf_shared_ptr( element_type* p_elem_arg )
+	  : p_elem_( p_elem_arg )
+	  , rc_guard_( p_elem_->rc_ )   // acquire reference count
+	{
+#ifdef TEST_ENABLE_LOGICCHECKER
+		if ( !rc_guard_.owns_count() ) {
+			throw std::logic_error( "limited_lf_shared_ptr: failed to acquire reference count." );
+		}
+#endif
 	}
 
 	void swap( limited_lf_shared_ptr& other ) noexcept
@@ -118,17 +130,6 @@ public:
 	}
 
 private:
-	limited_lf_shared_ptr( element_type* p_elem_arg )
-	  : p_elem_( p_elem_arg )
-	  , rc_guard_( p_elem_->rc_ )   // acquire reference count
-	{
-#ifdef TEST_ENABLE_LOGICCHECKER
-		if ( !rc_guard_.owns_count() ) {
-			throw std::logic_error( "limited_lf_shared_ptr: failed to acquire reference count." );
-		}
-#endif
-	}
-
 	template <typename U, typename... Args>
 	friend limited_lf_shared_ptr<U> make_limited_lf_shared_ptr( Args&&... args );
 

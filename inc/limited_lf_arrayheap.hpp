@@ -98,10 +98,10 @@ struct heap_element {
 
 }   // namespace itl
 
-template <typename T>
+template <typename T, size_t ELEMNUM = 10000>
 struct limited_arrayheap {
 	using element_type          = itl::heap_element<T>;
-	static constexpr size_t NUM = 10000;
+	static constexpr size_t NUM = ELEMNUM;
 
 	static element_type* allocate( void )
 	{
@@ -373,24 +373,24 @@ private:
 	static thread_local thread_local_retired_fifo_list_cleaner tl_retired_fifo_list_cleaner_;    //!< thread-local cleaner for retired elements list
 };
 
-template <typename T>
-constinit std::array<std::atomic<size_t>, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_rc_;
-template <typename T>
-constinit std::array<itl::heap_element<T>, limited_arrayheap<T>::NUM> limited_arrayheap<T>::array_heap_;
-template <typename T>
-std::atomic<size_t> limited_arrayheap<T>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
-template <typename T>
-constinit std::atomic<typename limited_arrayheap<T>::element_type*> limited_arrayheap<T>::ap_free_elem_head_ { nullptr };
+template <typename T, size_t ELEMNUM>
+constinit std::array<std::atomic<size_t>, limited_arrayheap<T, ELEMNUM>::NUM> limited_arrayheap<T, ELEMNUM>::array_rc_;
+template <typename T, size_t ELEMNUM>
+constinit std::array<itl::heap_element<T>, limited_arrayheap<T, ELEMNUM>::NUM> limited_arrayheap<T, ELEMNUM>::array_heap_;
+template <typename T, size_t ELEMNUM>
+std::atomic<size_t> limited_arrayheap<T, ELEMNUM>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
+template <typename T, size_t ELEMNUM>
+constinit std::atomic<typename limited_arrayheap<T, ELEMNUM>::element_type*> limited_arrayheap<T, ELEMNUM>::ap_free_elem_head_ { nullptr };
 
-template <typename T>
-constinit std::mutex limited_arrayheap<T>::primary_retired_elem_list_mtx_;
-template <typename T>
-constinit limited_arrayheap<T>::retired_fifo_list limited_arrayheap<T>::primary_retired_elem_list_;
-template <typename T>
-constinit thread_local limited_arrayheap<T>::retired_fifo_list limited_arrayheap<T>::retired_elem_list_;
+template <typename T, size_t ELEMNUM>
+constinit std::mutex limited_arrayheap<T, ELEMNUM>::primary_retired_elem_list_mtx_;
+template <typename T, size_t ELEMNUM>
+constinit limited_arrayheap<T, ELEMNUM>::retired_fifo_list limited_arrayheap<T, ELEMNUM>::primary_retired_elem_list_;
+template <typename T, size_t ELEMNUM>
+constinit thread_local limited_arrayheap<T, ELEMNUM>::retired_fifo_list limited_arrayheap<T, ELEMNUM>::retired_elem_list_;
 
-template <typename T>
-void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
+template <typename T, size_t ELEMNUM>
+void limited_arrayheap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
 {
 	for ( size_t i = 0; i < NUM; i++ ) {
 		array_rc_[i].store( 0 /* , std::memory_order_release */ );   // reset reference counter
