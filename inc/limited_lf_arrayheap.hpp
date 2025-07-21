@@ -40,6 +40,8 @@ struct heap_element {
 	std::atomic<heap_element*> ap_next_;              //!< freeリスト用に使われるnextポインタ
 	heap_element*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
 
+	int debug_info_;   //!< dummy member to ensure the size of heap_element is same as value_type
+
 	sticky_counter rc_;   //!< v_の寿命管理用reference counter
 	union {
 		value_type v_;
@@ -53,6 +55,7 @@ struct heap_element {
 	constexpr heap_element( void )
 	  : ap_next_ { nullptr }
 	  , p_retire_keep_next_ { nullptr }
+	  , debug_info_( 0 )
 	  , rc_()
 	  , dummy_() {}
 
@@ -129,13 +132,12 @@ struct limited_arrayheap {
 
 		{
 			size_t idx = elem_pointer_to_index( p_elem );
-			if ( array_rc_[idx].load( std::memory_order_acquire ) == 0 ) {
+			if ( array_rc_[idx].load( /*std::memory_order_acquire*/ ) == 0 ) {
 				// 参照カウンタがすでにゼロに到着しているので、freeリストに戻す
 				push_to_free_list( p_elem, idx );
 			} else {
 				// 参照カウンタがまだゼロに到着していないので、スレッドローカルretireリストにpushする。
-				p_elem->p_retire_keep_next_ = p_retired_elem_head_;
-				p_retired_elem_head_        = p_elem;
+				push_to_retired_list( p_elem );
 			}
 		}
 	}
@@ -152,12 +154,12 @@ private:
 	{
 		auto [p_ans, idx] = try_pop_from_retired_list();
 		if ( p_ans != nullptr ) {
-			array_rc_[idx].store( 0, std::memory_order_release );   // reset reference counter
+			p_ans->debug_info_ = 2;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
 		}
-
 		p_ans = try_pop_from_free_list();
 		if ( p_ans != nullptr ) {
+			p_ans->debug_info_ = 1;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
 		}
 
@@ -179,13 +181,9 @@ private:
 				// そのため、reference countを獲得する。
 				size_t        idx = elem_pointer_to_index( p_ans );
 				counter_guard tmp_rc_g( array_rc_[idx] );
-				// ここで、reference countの確保完了。
-
-				// p_ansがまだ有効かどうかを検証する。
-				// TODO: 先にフリーリストのヘッドを戻してから、reference count をrecycleするという順序なら、下のcompare_exchange_strong処理は不要のはず。
-				if ( ap_free_elem_head_.compare_exchange_strong( p_ans, p_ans ) ) {
-					// p_ansが有効であるこの検証完了
-					my_rc_g.swap( tmp_rc_g );   // リファレンスカウンタを保持しているガード変数をループの外の変数に移動し、ループを抜ける
+				if ( ap_free_elem_head_.load() == p_ans ) {
+					// カウンタ確保後も、p_ansが有効だったので、リファレンスカウンタの獲得は有効。
+					my_rc_g.swap( tmp_rc_g );   // ループを抜けた後もp_ansを参照するため、リファレンスカウンタを保持しているガード変数をループの外の変数に移動してから、ループを抜ける
 					break;
 				}
 
@@ -193,6 +191,12 @@ private:
 			}
 
 			element_type* p_new_head = p_ans->ap_next_.load();
+#ifdef TEST_ENABLE_LOGICCHECKER
+			if ( p_new_head == p_ans ) {
+				// 構造がリープしてしまっていることを示す。
+				throw std::logic_error( "p_ans->ap_next_ points to itself, which is not expected." );
+			}
+#endif
 			if ( ap_free_elem_head_.compare_exchange_strong( p_ans, p_new_head ) ) {
 				// スタック構造の先頭の置き換えに成功したので、先頭のノードの所有権の確保完了。ループを抜ける。
 				break;
@@ -206,12 +210,22 @@ private:
 
 	static void push_to_free_list( element_type* p_elem, size_t idx )
 	{
-		array_rc_[idx].store( 0, std::memory_order_release );   // reset reference counter
-
-		element_type* p_new_next = ap_free_elem_head_.load();
+		element_type* p_pre_free_list_head = ap_free_elem_head_.load();
 		do {
-			p_elem->ap_next_.store( p_new_next, std::memory_order_release );
-		} while ( !ap_free_elem_head_.compare_exchange_strong( p_new_next, p_elem, std::memory_order_acq_rel ) );
+#ifdef TEST_ENABLE_LOGICCHECKER
+			if ( p_pre_free_list_head == p_elem ) {
+				// 構造がリープしてしまっていることを示す。
+				throw std::logic_error( "p_elem to ap_free_elem_head_ already, which is not expected." );
+			}
+#endif
+			p_elem->ap_next_.store( p_pre_free_list_head /* , std::memory_order_release */ );
+		} while ( !ap_free_elem_head_.compare_exchange_strong( p_pre_free_list_head, p_elem /* , std::memory_order_acq_rel */ ) );
+#ifdef TEST_ENABLE_LOGICCHECKER
+		if ( p_elem == p_elem->ap_next_.load() ) {
+			// 構造がリープしてしまっていることを示す。
+			throw std::logic_error( "ap_next_ of p_elem is p_elem itself, which is not expected." );
+		}
+#endif
 	}
 
 	static std::pair<element_type*, size_t> try_pop_from_retired_list( void )
@@ -222,7 +236,7 @@ private:
 		}
 
 		size_t idx = elem_pointer_to_index( p_retired_elem_head_ );
-		if ( array_rc_[idx].load( std::memory_order_acquire ) != 0 ) {
+		if ( array_rc_[idx].load( /* std::memory_order_acquire */ ) != 0 ) {
 			// まだ参照しているスレッドがいるので、取り出せない。
 			return std::pair<element_type*, size_t>( nullptr, 0 );
 		}
@@ -237,14 +251,20 @@ private:
 		return std::pair<element_type*, size_t>( p_confirmed_free, idx );
 	}
 
+	static void push_to_retired_list( element_type* p_elem )
+	{
+		p_elem->p_retire_keep_next_ = p_retired_elem_head_;
+		p_retired_elem_head_        = p_elem;
+	}
+
 	static element_type* try_pop_from_unallocated( void )
 	{
-		size_t idx = watermark_of_array_.fetch_add( 1, std::memory_order_acq_rel );
+		size_t idx = watermark_of_array_.fetch_add( 1 );
 		if ( idx >= NUM ) {
 			// free要素が枯渇していることを示しているため、nullptrをreturnする。
 			// ただし、watermark_of_array_がオーバーシュートしてしまっているので、補正してからreturnする。
 			// この処理の効果によって、オーバーシュートはNUM+CPUコア数までに抑えられる。
-			watermark_of_array_.exchange( NUM, std::memory_order_release );
+			watermark_of_array_.exchange( NUM );
 			return nullptr;
 		}
 		return &( array_heap_[idx] );
@@ -285,12 +305,12 @@ template <typename T>
 void limited_arrayheap<T>::debug_destruction_and_regeneration( void )
 {
 	for ( size_t i = 0; i < NUM; i++ ) {
-		array_rc_[i].store( 0, std::memory_order_release );   // reset reference counter
+		array_rc_[i].store( 0 /* , std::memory_order_release */ );   // reset reference counter
 	}
 	array_heap_.~array();
 	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
-	watermark_of_array_.store( 0, std::memory_order_release );
-	ap_free_elem_head_.store( nullptr, std::memory_order_release );
+	watermark_of_array_.store( 0 /* , std::memory_order_release */ );
+	ap_free_elem_head_.store( nullptr /* , std::memory_order_release */ );
 	p_retired_elem_head_ = nullptr;
 }
 

@@ -122,15 +122,17 @@ private:
 	  : p_elem_( p_elem_arg )
 	  , rc_guard_( p_elem_->rc_ )   // acquire reference count
 	{
+#ifdef TEST_ENABLE_LOGICCHECKER
 		if ( !rc_guard_.owns_count() ) {
 			throw std::logic_error( "limited_lf_shared_ptr: failed to acquire reference count." );
 		}
+#endif
 	}
 
 	template <typename U, typename... Args>
 	friend limited_lf_shared_ptr<U> make_limited_lf_shared_ptr( Args&&... args );
 
-	element_type*                 p_elem_;     //!< pointer to the heap element that holds the value
+	element_type*                        p_elem_;     //!< pointer to the heap element that holds the value
 	sticky_counter_guard<sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
 };
 

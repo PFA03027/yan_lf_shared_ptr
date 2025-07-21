@@ -50,12 +50,12 @@ struct basic_sticky_counter {
 	 */
 	bool increment_if_not_zero( void ) noexcept
 	{
-		rc_type pre_value = counter_.fetch_add( 1, std::memory_order_acq_rel );
+		rc_type pre_value = counter_.fetch_add( 1 /* , std::memory_order_acq_rel */ );
 		bool    ans       = ( ( pre_value & is_zero_ ) == 0 );
 		if ( ans ) {
 			if ( pre_value == recycled_zero_ ) {
 				// recycled_zero_ -> recycled_zero_ + 1への変化したを獲得したスレッドなので、recycled_zero_フラグを落とす。
-				rc_type pre_value2 = counter_.fetch_and( ~recycled_zero_, std::memory_order_acq_rel );
+				rc_type pre_value2 = counter_.fetch_and( ~recycled_zero_ /* , std::memory_order_acq_rel */ );
 				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
 					exit( 1 );   // ここに来ることはないはず。デバッグ用のexit
 				}
@@ -64,7 +64,7 @@ struct basic_sticky_counter {
 			// ゼロフラグが立っていた場合、加算を差し戻す。
 			// 現実的には、この処理を行わなくても、オーバーフローすることはないが、論理的には起きうる。
 			// そのため、静的解析ツールなどが警告を出すかもしれない。それが、うるさいので、差し戻す処理を用意する。
-			counter_.fetch_sub( 1, std::memory_order_acq_rel );
+			counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ );
 		}
 		return ans;
 	}
@@ -82,15 +82,21 @@ struct basic_sticky_counter {
 	 */
 	bool decrement_then_is_zero( void ) noexcept
 	{
+		rc_type tmp = counter_.load( /* std::memory_order_acquire */ );
+		if ( tmp == 0x7FFFFFFFFFFFFFFF ) {
+			// すでにゼロになっているので、何もしない。
+			return false;
+		}
+
 		// ここに来る時点でrecycled_zero_のフラグは落ちているので、
 		// 1 -> 0の変化を検出するのに、recycled_zero_のフラグの状態考慮は不要で、1との比較で十分となっている。
-		if ( counter_.fetch_sub( 1, std::memory_order_acq_rel ) == 1 ) {
+		if ( counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ ) == 1 ) {
 			rc_type e = 0;
-			if ( counter_.compare_exchange_strong( e, is_zero_, std::memory_order_acq_rel ) ) {
+			if ( counter_.compare_exchange_strong( e, is_zero_ /* , std::memory_order_acq_rel */ ) ) {
 				return true;
 			}
 			if ( ( e & helped_ ) != 0 ) {
-				if ( ( counter_.exchange( is_zero_, std::memory_order_release ) & helped_ ) != 0 ) {
+				if ( ( counter_.exchange( is_zero_ /* , std::memory_order_release */ ) & helped_ ) != 0 ) {
 					// this thread get helped flag. this thread takes credit that decrement operation reached to zero.
 					return true;
 				} else {
@@ -112,13 +118,13 @@ struct basic_sticky_counter {
 	 */
 	rc_type read( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( /* std::memory_order_acquire */ );
 		if ( val == 0 ) {
 			// 1->0への変更処理中と思われる状況でゼロが読み出せてしまったので、ゼロになったことを確定する必要がある。
 			// そのため、ゼロフラグを立てられることを再検査する。
 			// また、1->0への変更に成功したスレッドの再判定ができるように、helped_フラグも立てておく。
 			// 補足： recycle直後の状況では、val == recycled_zero_であるため、val != 0となり、ここには到達しない。
-			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_, std::memory_order_acq_rel ) ) {
+			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_ /* , std::memory_order_acq_rel */ ) ) {
 				return 0;
 			}
 		}
@@ -132,7 +138,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_sticky_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( /* std::memory_order_acquire */ );
 		return ( val & is_zero_ ) != 0;
 	}
 
@@ -143,7 +149,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_recycled_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( /* std::memory_order_acquire */ );
 		return val == recycled_zero_;
 	}
 
@@ -154,7 +160,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_sticky_or_recycled_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( /* std::memory_order_acquire */ );
 		return ( val & ( is_zero_ | recycled_zero_ ) ) != 0;
 	}
 
@@ -304,7 +310,7 @@ public:
 		if ( p_counter_ == nullptr ) {
 			return;   // nothing to do
 		}
-		p_counter_->fetch_sub( 1, std::memory_order_acq_rel );
+		p_counter_->fetch_sub( 1 /* , std::memory_order_acq_rel */ );
 	}
 	constexpr counter_guard( void ) noexcept
 	  : p_counter_( nullptr )
@@ -317,7 +323,7 @@ public:
 		if ( p_counter_ == nullptr ) {
 			return;   // nothing to do
 		}
-		p_counter_->fetch_add( 1, std::memory_order_acq_rel );
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
 	}
 
 	counter_guard( counter_guard&& src ) noexcept
@@ -348,7 +354,7 @@ public:
 	explicit counter_guard( IAV& iav_ref ) noexcept
 	  : p_counter_( &iav_ref )
 	{
-		p_counter_->fetch_add( 1, std::memory_order_acq_rel );
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
 	}
 
 	void swap( counter_guard& other ) noexcept
