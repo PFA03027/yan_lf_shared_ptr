@@ -11,7 +11,10 @@
 
 #include <array>
 #include <atomic>
+#include <future>
 #include <optional>
+#include <thread>
+#include <vector>
 
 #include "limited_lf_arrayheap.hpp"
 #include "limited_lf_shared_ptr.hpp"
@@ -193,7 +196,7 @@ TEST( RcLfSpFifo, Empty_CanPush )
 {
 	// Arrange
 	lf_sp_fifo<NonTrivialType, QUEUE_SIZE> sut;
-	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42 );
+	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 
 	// Act
 	auto ret = sut.push( sp_data );
@@ -218,7 +221,7 @@ TEST( RcLfSpFifo, Empty_CanPushPop )
 {
 	// Arrange
 	lf_sp_fifo<NonTrivialType, QUEUE_SIZE> sut;
-	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42 );
+	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 	auto                                   ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 
@@ -234,10 +237,10 @@ TEST( RcLfSpFifo, Empty_CanPushPushPopPop )
 {
 	// Arrange
 	lf_sp_fifo<NonTrivialType, QUEUE_SIZE> sut;
-	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42 );
+	auto                                   sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 	auto                                   ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
-	sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 43 );
+	sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 43U );
 	ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 
@@ -251,3 +254,57 @@ TEST( RcLfSpFifo, Empty_CanPushPushPopPop )
 	ASSERT_TRUE( sp_ret2.has_value() );
 	EXPECT_EQ( ( *sp_ret2 )->get_value(), 43 );
 }
+
+#if 0
+TEST( RcLfSpFifo, Empty_CanPushPopHighload )
+{
+	// Arrange
+	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
+	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
+	lf_sp_fifo<NonTrivialType> sut;
+	constexpr size_t           NUM_THREADS = 10;
+	std::atomic<bool>          done { false };
+
+	// Act
+	std::vector<std::thread>         threads;
+	std::vector<std::future<size_t>> results;
+	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
+		std::packaged_task<size_t()> task( [&done, &sut]() {
+			size_t count = 0;
+			while ( !done.load() ) {
+				auto sp_elem = rc::make_limited_lf_shared_ptr<NonTrivialType>( count );   // Create shared pointer with value 42
+				auto ret     = sut.push( std::move( sp_elem ) );
+				if ( ret.has_value() ) {
+					throw std::logic_error( "Push failed unexpectedly, should not happen in high load test." );
+				}
+				ret = sut.pop();
+				if ( !ret.has_value() ) {
+					throw std::logic_error( "Pop failed unexpectedly, should not happen in high load test." );
+				}
+				count = ( *ret )->get_value() + 1;
+			}
+			return count;
+		} );   // 非同期実行する関数を登録する
+		results.emplace_back( task.get_future() );
+
+		threads.emplace_back( std::move( task ) );
+	}
+	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
+	done.store( true );                                         // 全スレッドに終了を通知する
+
+	// Assert
+	for ( auto& t : threads ) {
+		t.join();
+	}
+	size_t total_count = 0;
+	for ( auto& r : results ) {
+		size_t ret_count;
+		EXPECT_NO_THROW( ret_count = r.get() );
+		EXPECT_GT( ret_count, 0 );   // 各スレッドが少なくとも1つの要素を処理したことを確認する
+		total_count += ret_count;
+	}
+	std::cout << "Total elements processed: " << total_count << std::endl;
+	std::cout << "Watermark after high load: " << rc::limited_arrayheap<NonTrivialType>::get_watermark() << std::endl;
+	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), rc::limited_arrayheap<NonTrivialType>::NUM );
+}
+#endif

@@ -43,7 +43,7 @@ TEST( LimitedLfSharedPtr, CanMakeLimitedLfSharedPtrWithNonTrivialType_ThenReturn
 	// Arrange
 
 	// Act
-	auto sp_sut = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42 );
+	auto sp_sut = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 
 	// Assert
 	EXPECT_TRUE( sp_sut.is_valid() );
