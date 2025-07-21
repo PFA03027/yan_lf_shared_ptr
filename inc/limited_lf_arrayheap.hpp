@@ -41,8 +41,6 @@ struct heap_element {
 	std::atomic<heap_element*> ap_next_;              //!< freeリスト用に使われるnextポインタ
 	heap_element*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
 
-	int debug_info_;   //!< dummy member to ensure the size of heap_element is same as value_type
-
 	sticky_counter rc_;   //!< v_の寿命管理用reference counter
 	union {
 		value_type v_;
@@ -56,7 +54,6 @@ struct heap_element {
 	constexpr heap_element( void )
 	  : ap_next_ { nullptr }
 	  , p_retire_keep_next_ { nullptr }
-	  , debug_info_( 0 )
 	  , rc_()
 	  , dummy_() {}
 
@@ -250,12 +247,10 @@ private:
 	{
 		auto [p_ans, idx] = try_pop_from_retired_list();
 		if ( p_ans != nullptr ) {
-			p_ans->debug_info_ = 2;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
 		}
 		p_ans = try_pop_from_free_list();
 		if ( p_ans != nullptr ) {
-			p_ans->debug_info_ = 1;   // reset dummy member to ensure the size of heap_element is same as value_type
 			return p_ans;
 		}
 
