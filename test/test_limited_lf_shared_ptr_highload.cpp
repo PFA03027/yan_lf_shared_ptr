@@ -34,6 +34,8 @@ TEST( LimitedLfSharedPtrHighLoad, CanHandleHighLoad )
 			size_t count = 0;
 			while ( !done.load() ) {
 				auto sp_elem = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42 );   // Create shared pointer with value 42
+				// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
+				// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
 				count++;
 			}
 			return count;
