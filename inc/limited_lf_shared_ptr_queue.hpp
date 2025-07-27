@@ -52,6 +52,16 @@ class limited_lf_shared_ptr_queue {
 public:
 	using shared_ptr_type = limited_lf_shared_ptr<T>;
 
+	using que_contents_heap_type          = limited_arrayheap<shared_ptr_type, ELEMNUM>;
+	using que_contents_heap_element_type  = typename que_contents_heap_type::element_type;
+	using que_contents_heap_element_ptr_t = que_contents_heap_element_type*;
+
+	using que_node_type                    = itl::queue_node<que_contents_heap_element_ptr_t>;
+	using que_node_heap_type               = limited_arrayheap<que_node_type, ELEMNUM>;
+	using que_node_heap_element_type       = typename que_node_heap_type::element_type;
+	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
+	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_type;
+
 	~limited_lf_shared_ptr_queue()
 	{
 		que_node_heap_element_ptr_t p_cur_node = ap_que_head_.exchange( nullptr );
@@ -174,14 +184,14 @@ public:
 				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
 				// tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
 			} else {
+				que_contents_heap_element_ptr_t p_ans_ptr_candidate = p_expect_next_node->ref().v_;
 				if ( !ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
 					// headの獲得に失敗したので、最初からやり直す。
 					continue;
 				}
 
 				// headが獲得できたので、popできたデータを取り出す。
-				que_contents_heap_element_ptr_t p_ans_ptr_candidate = p_expect_next_node->ref().v_;
-				shared_ptr_type                 ans                 = std::move( p_ans_ptr_candidate->ref() );
+				shared_ptr_type ans = std::move( p_ans_ptr_candidate->ref() );
 				// pop処理が完了したので、ヒープへ返却する。
 				p_ans_ptr_candidate->destruct_value();
 				que_contents_heap_type::retire( p_ans_ptr_candidate );
@@ -193,16 +203,6 @@ public:
 	}
 
 private:
-	using que_contents_heap_type          = limited_arrayheap<shared_ptr_type, ELEMNUM>;
-	using que_contents_heap_element_type  = typename que_contents_heap_type::element_type;
-	using que_contents_heap_element_ptr_t = que_contents_heap_element_type*;
-
-	using que_node_type                    = itl::queue_node<que_contents_heap_element_ptr_t>;
-	using que_node_heap_type               = limited_arrayheap<que_node_type, ELEMNUM>;
-	using que_node_heap_element_type       = typename que_node_heap_type::element_type;
-	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
-	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_type;
-
 	void push_impl( que_contents_heap_element_ptr_t p_new_cnt, que_node_heap_element_ptr_t p_pushed_new_tail )
 	{
 		p_pushed_new_tail->emplace( nullptr, p_new_cnt );

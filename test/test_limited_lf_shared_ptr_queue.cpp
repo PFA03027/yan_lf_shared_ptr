@@ -98,15 +98,19 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPushPopPop )
 	EXPECT_EQ( ( *sp_ret2 )->get_value(), 43 );
 }
 
-#if 0
+#if 1
 TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 {
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
-	rc::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	constexpr size_t                                NUM_THREADS = 2;
-	std::atomic<bool>                               done { false };
+	using que_type               = rc::limited_lf_shared_ptr_queue<NonTrivialType>;
+	using que_contents_heap_type = que_type::que_contents_heap_type;
+	using que_node_heap_type     = que_type::que_node_heap_type;
+
+	que_type          sut;
+	constexpr size_t  NUM_THREADS = 20;
+	std::atomic<bool> done { false };
 
 	// Act
 	std::vector<std::thread>         threads;
@@ -123,12 +127,8 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 				}
 				ret = sut.pop();
 				if ( !ret.has_value() ) {
-					std::this_thread::yield();   // Yield to allow other threads to process
-					ret = sut.pop();
-					if ( !ret.has_value() ) {
-						std::cerr << "Pop failed unexpectedly, should not happen in high load test. count = " << count << std::endl;
-						throw std::logic_error( "Pop failed unexpectedly, should not happen in high load test. count = " + std::to_string( count ) );
-					}
+					std::cerr << "Pop failed unexpectedly, should not happen in high load test. count = " << count << std::endl;
+					throw std::logic_error( "Pop failed unexpectedly, should not happen in high load test. count = " + std::to_string( count ) );
 				}
 				count = ( *ret )->get_value() + 1;
 			}
@@ -153,7 +153,9 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << rc::limited_arrayheap<NonTrivialType>::get_watermark() << std::endl;
-	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), rc::limited_arrayheap<NonTrivialType>::NUM );
+	std::cout << "Watermark of contents in Queue after high load: " << que_contents_heap_type::get_watermark() << std::endl;
+	std::cout << "Watermark of node in Queue after high load: " << que_node_heap_type::get_watermark() << std::endl;
+	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), que_contents_heap_type::NUM );
+	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), que_node_heap_type::NUM );
 }
 #endif
