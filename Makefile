@@ -59,7 +59,7 @@ configure-cmake:
 test: build-test
 	set -e; \
 	cd ${BUILD_DIR}; \
-	ctest -j ${JOBS} -v
+	setarch $(uname -m) -R ctest -j ${JOBS} -v
 
 sample: build-test
 	build/sample/sample_of_constrained_any

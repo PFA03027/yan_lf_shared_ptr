@@ -12,6 +12,16 @@
 			}
 		},
 		{
+			"label": "make BUILDTYPE=Debug test with thread sanitizer",
+			"type": "shell",
+			"command": "make BUILDTYPE=Debug SANITIZER_TYPE=4 test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
 			"label": "make BUILDTYPE=Debug build-test with address sanitizer",
 			"type": "shell",
 			"command": "make BUILDTYPE=Debug SANITIZER_TYPE=1 build-test",
