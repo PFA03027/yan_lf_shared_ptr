@@ -19,6 +19,7 @@
 #include <mutex>
 #include <stdexcept>
 #include <type_traits>
+#include <utility>
 
 #include "rc_sticky_counter.hpp"
 
@@ -97,11 +98,24 @@ struct heap_element {
 template <typename T, size_t ELEMNUM = 10000>
 struct limited_arrayheap {
 	using element_type          = itl::heap_element<T>;
+	using counter_guard_type    = counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	static element_type* allocate( void )
 	{
 		return try_pop_from_free();
+	}
+
+	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
+	static std::pair<element_type*, counter_guard_type> allocate_with_guard( void )
+	{
+		return try_pop_with_rc_guard_from_free();
+	}
+
+	static counter_guard_type get_counter_guard( element_type* p_elem )
+	{
+		size_t idx = elem_pointer_to_index( p_elem );
+		return counter_guard( array_rc_[idx] );
 	}
 
 	/**
@@ -239,28 +253,54 @@ private:
 
 	static element_type* try_pop_from_free( void )
 	{
-		auto [p_ans, idx] = try_pop_from_retired_list();
-		if ( p_ans != nullptr ) {
+		{
+			auto [p_ans, idx] = try_pop_from_retired_list();
+			if ( p_ans != nullptr ) {
+				return p_ans;
+			}
+		}
+		{
+			auto [p_ans, my_rc_g] = try_pop_from_free_list();
+			if ( p_ans != nullptr ) {
+				return p_ans;
+			}
+		}
+		{
+			// freeリストが枯渇しているので、array_heap_の未使用エリアから取得する。
+			auto [p_ans, idx] = try_pop_from_unallocated();
 			return p_ans;
 		}
-		p_ans = try_pop_from_free_list();
-		if ( p_ans != nullptr ) {
-			return p_ans;
-		}
-
-		// freeリストが枯渇しているので、array_heap_の未使用エリアから取得する。
-		p_ans = try_pop_from_unallocated();
-		return p_ans;
 	}
 
-	static element_type* try_pop_from_free_list( void )
+	static std::pair<element_type*, counter_guard_type> try_pop_with_rc_guard_from_free( void )
 	{
-		element_type* p_ans = nullptr;
+		{
+			auto [p_ans, idx] = try_pop_from_retired_list();
+			if ( p_ans != nullptr ) {
+				return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type( array_rc_[idx] ) );
+			}
+		}
+		{
+			auto ans = try_pop_from_free_list();
+			if ( ans.first != nullptr ) {
+				return ans;
+			}
+		}
+		{
+			// freeリストが枯渇しているので、array_heap_の未使用エリアから取得する。
+			auto [p_ans, idx] = try_pop_from_unallocated();
+			return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type( array_rc_[idx] ) );
+		}
+	}
+
+	static std::pair<element_type*, counter_guard_type> try_pop_from_free_list( void )
+	{
+		element_type*      p_ans = nullptr;
+		counter_guard_type my_rc_g;
 		while ( true ) {
-			counter_guard<std::atomic<size_t>> my_rc_g;
 			while ( true ) {
 				p_ans = ap_free_elem_head_.load();
-				if ( p_ans == nullptr ) return p_ans;   // free要素が枯渇していることを示しているため、nullptrをreturnする。
+				if ( p_ans == nullptr ) return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type() );   // free要素が枯渇していることを示しているため、nullptrをreturnする。
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
@@ -290,7 +330,7 @@ private:
 			// p_ansが別の値に置き換わっていたので、最初からやり直す。
 		}
 
-		return p_ans;
+		return std::pair<element_type*, counter_guard_type>( p_ans, std::move( my_rc_g ) );
 	}
 
 	static void push_to_free_list( element_type* p_elem, size_t idx )
@@ -326,7 +366,7 @@ private:
 		return ans;
 	}
 
-	static element_type* try_pop_from_unallocated( void )
+	static std::pair<element_type*, size_t> try_pop_from_unallocated( void )
 	{
 		size_t idx = watermark_of_array_.fetch_add( 1 );
 		if ( idx >= NUM ) {
@@ -334,9 +374,9 @@ private:
 			// ただし、watermark_of_array_がオーバーシュートしてしまっているので、補正してからreturnする。
 			// この処理の効果によって、オーバーシュートはNUM+CPUコア数までに抑えられる。
 			watermark_of_array_.exchange( NUM );
-			return nullptr;
+			return std::pair<element_type*, size_t>( nullptr, idx );
 		}
-		return &( array_heap_[idx] );
+		return std::pair<element_type*, size_t>( &( array_heap_[idx] ), idx );
 	}
 
 	static size_t elem_pointer_to_index( element_type* p_elem )
