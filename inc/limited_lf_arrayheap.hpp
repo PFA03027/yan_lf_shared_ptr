@@ -54,7 +54,7 @@ struct heap_element {
 	  : ap_next_ { nullptr }
 	  , p_retire_keep_next_ { nullptr }
 	  , dummy_() {}
-
+#if 0
 	template <typename U = T, typename std::enable_if<std::is_copy_constructible<U>::value>::type* = nullptr>
 	value_type& store( const value_type& v_arg ) noexcept( std::is_nothrow_copy_constructible<T>::value )
 	{
@@ -66,6 +66,7 @@ struct heap_element {
 	{
 		return *( new ( &v_ ) value_type( std::move( v_arg ) ) );
 	}
+#endif
 
 	template <typename... Args, typename std::enable_if<std::is_constructible<T, Args&&...>::value>::type* = nullptr>
 	value_type& emplace( Args&&... args ) noexcept( std::is_nothrow_constructible<T>::value )

@@ -77,7 +77,7 @@ public:
 			// キューのエリアが確保できなかったので、push失敗
 			return pushed_sp;
 		}
-		p->store( std::move( pushed_sp ) );
+		p->emplace( std::move( pushed_sp ) );
 
 		if ( !push_ptr( p ) ) {
 			pushed_sp = std::move( p->ref() );
