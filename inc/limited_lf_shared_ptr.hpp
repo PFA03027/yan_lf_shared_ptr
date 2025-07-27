@@ -18,13 +18,29 @@
 namespace rc {
 namespace itl {
 
-}
+struct lf_shared_value_carrier_base {
+	virtual ~lf_shared_value_carrier_base() = default;
+	sticky_counter rc_;   //!< v_の寿命管理用reference counter
+};
+
+template <typename T>
+struct lf_shared_value_carrier : public lf_shared_value_carrier_base {
+	using value_type = T;
+	value_type v_;
+
+	template <typename... Args, typename std::enable_if<std::is_constructible<T, Args&&...>::value>::type* = nullptr>
+	lf_shared_value_carrier( Args&&... args ) noexcept( std::is_nothrow_constructible<T>::value )
+	  : lf_shared_value_carrier_base()
+	  , v_( std::forward<Args>( args )... )
+	{
+	}
+};
+
+}   // namespace itl
 
 template <typename T>
 class limited_lf_shared_ptr {
 public:
-	using element_type = itl::heap_element<T>;
-
 	~limited_lf_shared_ptr()
 	{
 		reset();
@@ -76,7 +92,7 @@ public:
 		if ( p_elem_ == nullptr ) {
 			return nullptr;   // nothing to do
 		}
-		return &( p_elem_->ref() );
+		return &( p_elem_->ref().v_ );
 	}
 
 	const T* get() const noexcept
@@ -84,23 +100,23 @@ public:
 		if ( p_elem_ == nullptr ) {
 			return nullptr;   // nothing to do
 		}
-		return &( p_elem_->ref() );
+		return &( p_elem_->ref().v_ );
 	}
 	T* operator->() noexcept
 	{
-		return &p_elem_->ref();
+		return &( p_elem_->ref().v_ );
 	}
 	const T* operator->() const noexcept
 	{
-		return &p_elem_->ref();
+		return &( p_elem_->ref().v_ );
 	}
 	T& operator*() noexcept
 	{
-		return p_elem_->ref();
+		return p_elem_->ref().v_;
 	}
 	const T& operator*() const noexcept
 	{
-		return p_elem_->ref();
+		return p_elem_->ref().v_;
 	}
 	bool is_valid() const noexcept
 	{
@@ -113,15 +129,19 @@ public:
 		}
 		if ( rc_guard_.decrement_then_is_zero() ) {   // decrement the reference count
 			p_elem_->destruct_value();
-			limited_arrayheap<T>::retire( p_elem_ );
+			heap_type::retire( p_elem_ );
 		}
 		p_elem_ = nullptr;
 	}
 
 private:
+	using carrier_type = itl::lf_shared_value_carrier<T>;
+	using heap_type    = limited_arrayheap<carrier_type>;
+	using element_type = itl::heap_element<carrier_type>;
+
 	limited_lf_shared_ptr( element_type* p_elem_arg )
 	  : p_elem_( p_elem_arg )
-	  , rc_guard_( p_elem_->rc_ )   // acquire reference count
+	  , rc_guard_( p_elem_->ref().rc_ )   // acquire reference count
 	{
 #ifdef TEST_ENABLE_LOGICCHECKER
 		if ( !rc_guard_.owns_count() ) {
@@ -140,7 +160,7 @@ private:
 template <typename T, typename... Args>
 limited_lf_shared_ptr<T> make_limited_lf_shared_ptr( Args&&... args )
 {
-	typename limited_lf_shared_ptr<T>::element_type* ptr = limited_arrayheap<T>::allocate();
+	typename limited_lf_shared_ptr<T>::element_type* ptr = limited_lf_shared_ptr<T>::heap_type::allocate();
 	if ( ptr == nullptr ) {
 		throw std::bad_alloc();   // allocation failed
 	}

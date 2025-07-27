@@ -41,7 +41,6 @@ struct heap_element {
 	std::atomic<heap_element*> ap_next_;              //!< freeリスト用に使われるnextポインタ
 	heap_element*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
 
-	sticky_counter rc_;   //!< v_の寿命管理用reference counter
 	union {
 		value_type v_;
 		uint8_t    dummy_;
@@ -54,7 +53,6 @@ struct heap_element {
 	constexpr heap_element( void )
 	  : ap_next_ { nullptr }
 	  , p_retire_keep_next_ { nullptr }
-	  , rc_()
 	  , dummy_() {}
 
 	template <typename U = T, typename std::enable_if<std::is_copy_constructible<U>::value>::type* = nullptr>
@@ -125,11 +123,6 @@ struct limited_arrayheap {
 		if ( p_elem == nullptr ) {
 			return;
 		}
-		if ( !p_elem->rc_.is_sticky_or_recycled_zero() ) {
-			// rcがゼロになるまで待っても良いが、とりあえず、例外をスローする実装を行う。
-			throw std::logic_error( "limited_arrayheap::retire() is called, but reference count is not zero." );
-		}
-		p_elem->rc_.recycle();   // recycle the sticky counter
 
 		{
 			size_t idx = elem_pointer_to_index( p_elem );
