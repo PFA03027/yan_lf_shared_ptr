@@ -26,6 +26,7 @@ template <typename T>
 struct queue_node {
 	static_assert( std::is_trivially_copyable<T>::value, "T should be trivially copyable" );
 	static_assert( std::is_default_constructible<T>::value, "T should be default constructible" );
+	// static_assert( std::is_pointer<T>::value, "T should be pointer" );
 
 	std::atomic<void*> ap_next_;   // リファレンスカウンタが利用可能なヒープ要素へのポインタを格納したいが、不完全型になってしまうので、void*で定義する。
 	T                  v_;
@@ -175,7 +176,19 @@ public:
 				p_expect_tail_node = p_chk_tail_node;
 			}
 
-			que_node_heap_element_ptr_t p_expect_next_node = load_queue_node_next( p_expect_head_node );
+			que_node_heap_element_ptr_t      p_expect_next_node = load_queue_node_next( p_expect_head_node );
+			que_node_heap_element_rc_guard_t expect_next_rc_g;
+			while ( p_expect_next_node != nullptr ) {
+				// ABA問題を回避するため、リファレンスカウンタの獲得がうまくいくまでループ。概念的にはハザードポインタ登録と同じことをやっている。
+				que_node_heap_element_rc_guard_t tmp_expect_next_rc_g = que_node_heap_type::get_counter_guard( p_expect_next_node );
+				que_node_heap_element_ptr_t      p_chk_next_node      = load_queue_node_next( p_expect_head_node );
+				if ( p_expect_next_node == p_chk_next_node ) {
+					expect_next_rc_g = std::move( tmp_expect_next_rc_g );
+					break;
+				}
+				p_expect_next_node = p_chk_next_node;
+			}
+
 			if ( p_expect_head_node == p_expect_tail_node ) {
 				// queueが空かもしれないが、tailの更新が遅れているだけかもしれない
 				if ( p_expect_next_node == nullptr ) {
@@ -184,13 +197,20 @@ public:
 				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
 				// tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
 			} else {
-				que_contents_heap_element_ptr_t p_ans_ptr_candidate = p_expect_next_node->ref().v_;
 				if ( !ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
 					// headの獲得に失敗したので、最初からやり直す。
 					continue;
 				}
+				// headが獲得できたので、popできたポインタ情報を取り出す。
+				que_contents_heap_element_ptr_t p_ans_ptr_candidate = p_expect_next_node->ref().v_;
+				// もともとのアルゴリズムでは、このv_の読み出しは、ap_que_head_.compare_exchange_strong()前で行っている。
+				// これは、ABA問題を避けるために先行読み出しを行う必要があったから、そのように実装されている。
+				// しかし、一方でその実装だと、Thread Sanitizerがレースコンディションのエラーを指摘してくる。
+				// Thread Sanitizerの指摘を避けるためには、ABA問題を避けつつ、ap_que_head_.compare_exchange_strong()の後に読み出す必要がある。
+				// これを実現するには、p_expect_next_nodeに対してのABA問題を避けるために、ハザードポインタを用いる方法が基本である。
+				// この実装では、ハザードポインタの代わりにリファレンスカウンタを用いるので、p_expect_next_nodeに対してリファレンスカウンタを
+				// 適用し、p_expect_next_nodeに対してのABA問題を避ける方策を採った。
 
-				// headが獲得できたので、popできたデータを取り出す。
 				shared_ptr_type ans = std::move( p_ans_ptr_candidate->ref() );
 				// pop処理が完了したので、ヒープへ返却する。
 				p_ans_ptr_candidate->destruct_value();
