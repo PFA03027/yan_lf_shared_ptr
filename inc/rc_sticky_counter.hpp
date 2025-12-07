@@ -54,7 +54,7 @@ struct basic_sticky_counter {
 		bool    ans       = ( ( pre_value & is_zero_ ) == 0 );
 		if ( ans ) {
 			if ( pre_value == recycled_zero_ ) {
-				// recycled_zero_ -> recycled_zero_ + 1への変化したを獲得したスレッドなので、recycled_zero_フラグを落とす。
+				// recycled_zero_ -> recycled_zero_ + 1への変化を起こしたスレッドなので、recycled_zero_フラグを落とす。
 				rc_type pre_value2 = counter_.fetch_and( ~recycled_zero_ /* , std::memory_order_acq_rel */ );
 				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
 					exit( 1 );   // ここに来ることはないはず。デバッグ用のexit
@@ -168,11 +168,11 @@ struct basic_sticky_counter {
 	 * @brief 再利用するために、カウンタの状態を初期化しなおす。
 	 *
 	 * @pre
-	 * このAPIを利用できるのは、decrement_then_is_zero()がtrueで帰ってきたスレッドに制約する必要がある。
-	 * そうでない場合、何らかの方法で、このカウンターがすでに参照されていないことを外部ロジックで保証されている必要がある。
+	 * このAPIを利用できるのは、decrement_then_is_zero()がtrueで帰ってきたスレッドであること。
+	 * そうでない場合、何らかの方法で、このカウンターがすでに参照されていないことを外部ロジックで保証されていること。
 	 *
 	 * @warning
-	 * 事前条件が守られない場合、stickyではなくなってしまう。
+	 * 事前条件が守られない場合、stickyではなくなってしまい、異常なリファレンスカウンタとして動作する。結果として、メモリ破壊等の異常状態に至る。
 	 */
 	void recycle( void ) noexcept
 	{

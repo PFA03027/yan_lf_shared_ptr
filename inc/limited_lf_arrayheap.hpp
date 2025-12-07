@@ -101,11 +101,6 @@ struct limited_arrayheap {
 	using counter_guard_type    = counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
-	static element_type* allocate( void )
-	{
-		return try_pop_from_free();
-	}
-
 	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
 	static std::pair<element_type*, counter_guard_type> allocate_with_guard( void )
 	{
@@ -118,10 +113,15 @@ struct limited_arrayheap {
 		return counter_guard( array_rc_[idx] );
 	}
 
+	static element_type* allocate( void )
+	{
+		return try_pop_from_free();
+	}
+
 	/**
 	 * @brief retire element
 	 *
-	 * @pre p_elem->v_の値構築を行った場合は、destruct_value()で値を破棄していること。
+	 * @pre p_elem->v_の値構築を行った場合は、destruct_value()でv_の値を破棄済であること。
 	 *
 	 * @param p_elem
 	 */

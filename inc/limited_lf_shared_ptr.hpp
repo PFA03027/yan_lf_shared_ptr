@@ -54,13 +54,6 @@ public:
 	  : p_elem_( other.p_elem_ )
 	  , rc_guard_( other.rc_guard_ ) {}
 
-	limited_lf_shared_ptr( limited_lf_shared_ptr&& other ) noexcept
-	  : p_elem_( other.p_elem_ )
-	  , rc_guard_( std::move( other.rc_guard_ ) )
-	{
-		other.p_elem_ = nullptr;   // reset other pointer to avoid double free
-	}
-
 	limited_lf_shared_ptr& operator=( const limited_lf_shared_ptr& other )
 	{
 		if ( this == &other ) {
@@ -69,6 +62,13 @@ public:
 
 		limited_lf_shared_ptr( other ).swap( *this );   // Use copy-and-swap idiom for exception safety
 		return *this;
+	}
+
+	limited_lf_shared_ptr( limited_lf_shared_ptr&& other ) noexcept
+	  : p_elem_( other.p_elem_ )
+	  , rc_guard_( std::move( other.rc_guard_ ) )
+	{
+		other.p_elem_ = nullptr;   // reset other pointer to avoid double free
 	}
 
 	limited_lf_shared_ptr& operator=( limited_lf_shared_ptr&& other ) noexcept
