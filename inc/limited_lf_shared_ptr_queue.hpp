@@ -61,7 +61,7 @@ public:
 	using que_node_heap_type               = lfheap::fixedarray_heap<que_node_type, ELEMNUM>;
 	using que_node_heap_element_type       = typename que_node_heap_type::element_type;
 	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
-	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_type;
+	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_t;
 
 	~limited_lf_shared_ptr_queue()
 	{

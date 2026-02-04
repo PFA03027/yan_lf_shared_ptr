@@ -95,16 +95,16 @@ struct heap_element {
 template <typename T, size_t ELEMNUM = 10000>
 struct fixedarray_heap {
 	using element_type          = heap_element<T>;
-	using counter_guard_type    = rc::counter_guard<std::atomic<size_t>>;
+	using counter_guard_t    = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
-	static std::pair<element_type*, counter_guard_type> allocate_with_guard( void )
+	static std::pair<element_type*, counter_guard_t> allocate_with_guard( void )
 	{
 		return try_pop_with_rc_guard_from_free();
 	}
 
-	static counter_guard_type get_counter_guard( element_type* p_elem )
+	static counter_guard_t get_counter_guard( element_type* p_elem )
 	{
 		size_t idx = elem_pointer_to_index( p_elem );
 		return rc::counter_guard( array_rc_[idx] );
@@ -269,12 +269,12 @@ private:
 		}
 	}
 
-	static std::pair<element_type*, counter_guard_type> try_pop_with_rc_guard_from_free( void )
+	static std::pair<element_type*, counter_guard_t> try_pop_with_rc_guard_from_free( void )
 	{
 		{
 			auto [p_ans, idx] = try_pop_from_retired_list();
 			if ( p_ans != nullptr ) {
-				return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type( array_rc_[idx] ) );
+				return std::pair<element_type*, counter_guard_t>( p_ans, counter_guard_t( array_rc_[idx] ) );
 			}
 		}
 		{
@@ -286,18 +286,18 @@ private:
 		{
 			// freeリストが枯渇しているので、array_heap_の未使用エリアから取得する。
 			auto [p_ans, idx] = try_pop_from_unallocated();
-			return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type( array_rc_[idx] ) );
+			return std::pair<element_type*, counter_guard_t>( p_ans, counter_guard_t( array_rc_[idx] ) );
 		}
 	}
 
-	static std::pair<element_type*, counter_guard_type> try_pop_from_free_list( void )
+	static std::pair<element_type*, counter_guard_t> try_pop_from_free_list( void )
 	{
 		element_type*      p_ans = nullptr;
-		counter_guard_type my_rc_g;
+		counter_guard_t my_rc_g;
 		while ( true ) {
 			while ( true ) {
 				p_ans = ap_free_elem_head_.load();
-				if ( p_ans == nullptr ) return std::pair<element_type*, counter_guard_type>( p_ans, counter_guard_type() );   // free要素が枯渇していることを示しているため、nullptrをreturnする。
+				if ( p_ans == nullptr ) return std::pair<element_type*, counter_guard_t>( p_ans, counter_guard_t() );   // free要素が枯渇していることを示しているため、nullptrをreturnする。
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
@@ -327,7 +327,7 @@ private:
 			// p_ansが別の値に置き換わっていたので、最初からやり直す。
 		}
 
-		return std::pair<element_type*, counter_guard_type>( p_ans, std::move( my_rc_g ) );
+		return std::pair<element_type*, counter_guard_t>( p_ans, std::move( my_rc_g ) );
 	}
 
 	static void push_to_free_list( element_type* p_elem, size_t idx )
