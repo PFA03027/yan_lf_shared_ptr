@@ -133,6 +133,10 @@ TEST( RcCounterGuard, CanConstruct )
 	EXPECT_TRUE( sut.owns_count() );
 	EXPECT_EQ( sc.read(), 1 );
 	EXPECT_FALSE( sc.is_sticky_zero() );
+
+	// Clean up
+	auto ret = sut.decrement_then_is_zero();
+	EXPECT_TRUE( ret );
 }
 
 TEST( RcCounterGuard, CanDestruct )
@@ -145,7 +149,9 @@ TEST( RcCounterGuard, CanDestruct )
 	EXPECT_FALSE( sc.is_sticky_zero() );
 
 	// Act
-	delete p_sut;   // Destructor should decrement the counter
+	auto ret = p_sut->decrement_then_is_zero();   // decrement the counter
+	EXPECT_TRUE( ret );
+	delete p_sut;   // Destructor should not exit
 
 	// Assert
 	EXPECT_EQ( sc.read(), 0 );
@@ -173,7 +179,8 @@ TEST( RcCounterGuard, StickyZero_CanDecrementThenIsZero_ThenReturnFalse )
 	rc::sticky_counter                           sc;
 	rc::sticky_counter_guard<rc::sticky_counter> sut( sc );
 	EXPECT_EQ( sc.read(), 1 );
-	sut.decrement_then_is_zero();   // Set sticky zero
+	auto ret = sut.decrement_then_is_zero();   // Set sticky zero
+	ASSERT_TRUE( ret );
 	EXPECT_EQ( sc.read(), 0 );
 	EXPECT_TRUE( sc.is_sticky_zero() );
 
@@ -192,7 +199,8 @@ TEST( RcCounterGuard, StickyZero_CanDestruct_ThenKeepStickyZero )
 	rc::sticky_counter                            sc;
 	rc::sticky_counter_guard<rc::sticky_counter>* p_sut = new rc::sticky_counter_guard<rc::sticky_counter>( sc );
 	EXPECT_EQ( sc.read(), 1 );
-	p_sut->decrement_then_is_zero();   // Set sticky zero
+	auto ret = p_sut->decrement_then_is_zero();   // Set sticky zero
+	ASSERT_TRUE( ret );
 	EXPECT_EQ( sc.read(), 0 );
 	EXPECT_TRUE( sc.is_sticky_zero() );
 

@@ -231,8 +231,13 @@ private:
 	mutable std::atomic<rc_type> counter_ { recycled_zero_ };   //!< reference counter. mutable attribute is for read() member function
 };
 
+using sticky_counter = basic_sticky_counter<uint64_t>;
+
 /**
  * @brief basic_sticky_counterのincrementとdecrementの対称性を保証する必要がある制約を守るためのサポートクラス
+ *
+ * @warning
+ * デストラクタが呼び出される前に、decrement_then_is_zero()を呼び出し、ゼロに到達した場合に必要な処理行うこと。
  *
  * @tparam SC
  */
@@ -240,7 +245,11 @@ template <typename SC>
 struct sticky_counter_guard {
 	~sticky_counter_guard()
 	{
-		decrement_then_is_zero();
+		if ( decrement_then_is_zero() ) {
+			exit( 1 );
+			// decrement_then_is_zero()がtrueとなったのに、該当カウンタに対する処置が行われないまま情報がロストすることを意味する。
+			// よって、不具合につながるので、異常を検出できるようにexit(1)を呼び出す。
+		}
 	}
 	constexpr sticky_counter_guard( void ) noexcept
 	  : p_sc_( nullptr ), is_owns_count_( false )
@@ -259,6 +268,9 @@ struct sticky_counter_guard {
 		src.is_owns_count_ = false;
 	}
 
+#if 0
+	// decrement_then_is_zero()がtrueとなったのに、該当カウンタに対する処置が行われないまま情報がロストすることを意味する。
+	// よって、不具合につながるので、このクラスでの代入演算子は未定義とする。
 	sticky_counter_guard& operator=( const sticky_counter_guard& src ) noexcept
 	{
 		if ( this == &src ) {
@@ -277,12 +289,18 @@ struct sticky_counter_guard {
 			return *this;
 		}
 
-		decrement_then_is_zero();   // Clean up current state
+		auto ret = decrement_then_is_zero();   // Clean up current state
 
 		p_sc_          = src.p_sc_;
 		is_owns_count_ = src.is_owns_count_;
 		if ( ( p_sc_ != nullptr ) && is_owns_count_ ) {
 			is_owns_count_ = p_sc_->increment_if_not_zero();
+		}
+
+		if ( ret ) {
+			exit( 1 );
+			// decrement_then_is_zero()がtrueとなったのに、該当カウンタに対する処置が行われないまま情報がロストすることを意味する。
+			// よって、不具合につながるので、exit(1)を呼び出す。
 		}
 		return *this;
 	}
@@ -292,14 +310,21 @@ struct sticky_counter_guard {
 		if ( this == &src ) {
 			return *this;   // Handle self-assignment
 		}
-		decrement_then_is_zero();   // Clean up current state
+		auto ret = decrement_then_is_zero();   // Clean up current state
 
 		p_sc_              = src.p_sc_;
 		is_owns_count_     = src.is_owns_count_;
 		src.p_sc_          = nullptr;
 		src.is_owns_count_ = false;
+
+		if ( ret ) {
+			exit( 1 );
+			// decrement_then_is_zero()がtrueとなったのに、該当カウンタに対する処置が行われないまま情報がロストすることを意味する。
+			// よって、不具合につながるので、exit(1)を呼び出す。
+		}
 		return *this;
 	}
+#endif
 
 	explicit sticky_counter_guard( SC& sc_ref ) noexcept
 	  : p_sc_( &sc_ref ), is_owns_count_( p_sc_->increment_if_not_zero() )
@@ -312,7 +337,8 @@ struct sticky_counter_guard {
 		std::swap( is_owns_count_, other.is_owns_count_ );
 	}
 
-	bool decrement_then_is_zero( void ) noexcept   // ゼロに到達したスレッドがそれを認識できるように結果を返す
+	// Destructorが呼び出される前に、この関数を呼び出し、ゼロに到達した場合に必要な処理行うこと。
+	[[nodiscard]] bool decrement_then_is_zero( void ) noexcept   // ゼロに到達したスレッドがそれを認識できるように結果を返す
 	{
 		if ( p_sc_ == nullptr ) {
 			return false;
@@ -333,8 +359,6 @@ private:
 	SC*  p_sc_;            //<! pointer to sticky_counter
 	bool is_owns_count_;   //!< is success to increment ? true: success to increment
 };
-
-using sticky_counter = basic_sticky_counter<uint64_t>;
 
 /**
  * @brief counter guard for integral type atomic variable.
