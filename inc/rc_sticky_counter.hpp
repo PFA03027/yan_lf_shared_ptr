@@ -35,6 +35,11 @@ namespace rc {
  * @brief sticky counter that could be recycle
  *
  * CppCon 2024で紹介されたwait-free sticky counterをもとに、再利用できる機能を追加したwait-free sticky counter
+ *
+ * @note
+ * Wait-freeとなるのは、fetch_add()がatomicに実行可能な命令を持つx86の場合。
+ * fetch_add()の実装がCAS loopで実現される(と思われる)ARM系の場合、厳密にはWait-freeとはならない。
+ *
  */
 template <typename T>
 struct basic_sticky_counter {
@@ -45,25 +50,44 @@ struct basic_sticky_counter {
 	/**
 	 * @brief increment counter if it is not zero
 	 *
-	 * @return true counter is not zero, then success to increment
-	 * @return false counter is zero, therefore fail to increment
+	 * @return true counter value before increment is initial value or not zero, then success to increment
+	 * @return false counter value reaches to zero sticky, therefore fail to increment
 	 */
 	bool increment_if_not_zero( void ) noexcept
 	{
 		rc_type pre_value = counter_.fetch_add( 1 /* , std::memory_order_acq_rel */ );
-		bool    ans       = ( ( pre_value & is_zero_ ) == 0 );
+#ifdef ENABLE_STICKY_COUNTER_OVERFLOW_CHECK
+		if ( is_overflow( pre_value ) ) {
+			exit( 1 );
+			// オーバーフローが発生した場合、sticky counterとしては回復不能な状態となる。異常検出可能なように、exit(1)を呼び出す。
+			// 補足：
+			// CAS loopを使うことで加算前にチェック可能だが、wait-freeではなくなってしまう。
+			// さらに、チェックでオーバーフロー発生前に加算を回避したとしても、呼び出し側で、結局は整合性が取れなくなってしまう。
+			// そのため、事前回避は無意味である。
+			// 呼び出し側の使い方を変えるしか改善方法はないので、ここでexit(1)することで、呼び出し側に異常を知らせるだけで十分である。
+		}
+#endif
+		bool ans = ( ( pre_value & is_zero_ ) == 0 );
 		if ( ans ) {
+			// ゼロフラグが立っていないので、incrementに成功
 			if ( pre_value == recycled_zero_ ) {
 				// recycled_zero_ -> recycled_zero_ + 1への変化を起こしたスレッドなので、recycled_zero_フラグを落とす。
-				rc_type pre_value2 = counter_.fetch_and( ~recycled_zero_ /* , std::memory_order_acq_rel */ );
+#ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
+				rc_type pre_value2 =
+#endif
+					counter_.fetch_and( ~recycled_zero_ /* , std::memory_order_acq_rel */ );
+#ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
 				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
-					exit( 1 );   // ここに来ることはないはず。デバッグ用のexit
+					exit( 1 );   // ここに来ることはない。デバッグ目的として、論理エラーを検出するためexit(1)を呼び出す。
 				}
+#endif
 			}
 		} else {
-			// ゼロフラグが立っていた場合、加算を差し戻す。
+			// ゼロフラグが立っていたので、incrementには失敗。
+			// ただ、加算自体は実行されてしまっていて、これを放置すると、オーバーフローが発生するかもしれないので、加算を差し戻す。
 			// 現実的には、この処理を行わなくても、オーバーフローすることはないが、論理的には起きうる。
-			// そのため、静的解析ツールなどが警告を出すかもしれない。それが、うるさいので、差し戻す処理を用意する。
+			// 例えば、increment_if_not_zero() == falseとなっても、これを無視して、increment_if_not_zero()が呼び出され続けるような使い方をされた場合にオーバーフローが発生する。
+			// オーバーフローが発生すると、sticky counterとしては回復不能状態となるので、差し戻す処理を用意する。
 			counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ );
 		}
 		return ans;
@@ -72,29 +96,36 @@ struct basic_sticky_counter {
 	/**
 	 * @brief decrement counter
 	 *
-	 * @pre increment_if_not_zero()の戻り値がtrueであること。decrement_then_is_zero()の呼び出し回数が、increment_if_not_zero()の戻り値がtrueである回数以下であること。
+	 * @pre increment_if_not_zero()の戻り値がtrueであること。
+	 * @pre decrement_then_is_zero()の呼び出し回数が、increment_if_not_zero()の戻り値がtrueである回数以下であること。
 	 * この事前条件は、increment_if_not_zero()の戻り値がtrueであった呼び出しとdecrement_then_is_zero()の呼び出しが対称関係であることの保証を要求している。
 	 *
-	 * @return true counter reatched to zero after decrement of caller thread
-	 * @return false counter is not zero, even if decrement of caller thread
+	 * @return true counter value reatched to zero after decrement of caller thread
+	 * @return false counter value does not reached to zero, even if decrement of caller thread
 	 *
 	 * @warning if caller side violate the pre-condtion, this sticky counter is broken
 	 */
 	bool decrement_then_is_zero( void ) noexcept
 	{
+#ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
 		rc_type tmp = counter_.load( /* std::memory_order_acquire */ );
-		if ( tmp == 0x7FFFFFFFFFFFFFFF ) {
-			// すでにゼロになっているので、何もしない。
-			return false;
+		if ( ( tmp & recycled_zero_ ) != 0 ) {
+			// 呼び出し側が、すくなくともincrement_if_not_zero()を一度も呼び出さずに、decrement_then_is_zero()を呼び出した状況。
+			// pre conditionの違反なので、exit(1)を呼ぶ。
+			exit( 1 );
 		}
+#endif
 
 		// ここに来る時点でrecycled_zero_のフラグは落ちているので、
 		// 1 -> 0の変化を検出するのに、recycled_zero_のフラグの状態考慮は不要で、1との比較で十分となっている。
 		if ( counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ ) == 1 ) {
 			rc_type e = 0;
 			if ( counter_.compare_exchange_strong( e, is_zero_ /* , std::memory_order_acq_rel */ ) ) {
+				// fetch_sub(1)で、counter_がゼロに到達したあと、ゼロ確定に成功した。よって、trueを返す。
 				return true;
 			}
+
+			// fetch_sub(1)で、counter_がゼロに到達したあと、別スレッドがゼロ確定を行ったか、incrementされた場合にここに到達する。
 			if ( ( e & helped_ ) != 0 ) {
 				if ( ( counter_.exchange( is_zero_ /* , std::memory_order_release */ ) & helped_ ) != 0 ) {
 					// this thread get helped flag. this thread takes credit that decrement operation reached to zero.
@@ -132,9 +163,10 @@ struct basic_sticky_counter {
 	}
 
 	/**
-	 * @brief read counter value
+	 * @brief check if counter value is zero
 	 *
-	 * @return rc_type counter value
+	 * @retval true counter value is zero
+	 * @retval false counter value is not zero
 	 */
 	bool is_sticky_zero( void ) const noexcept
 	{
@@ -143,9 +175,10 @@ struct basic_sticky_counter {
 	}
 
 	/**
-	 * @brief read counter value
+	 * @brief check if counter value is before recycled or after recycled
 	 *
-	 * @return rc_type counter value
+	 * @retval true counter is called recycle()
+	 * @retval false counter is not called recycle() yet
 	 */
 	bool is_recycled_zero( void ) const noexcept
 	{
@@ -154,9 +187,10 @@ struct basic_sticky_counter {
 	}
 
 	/**
-	 * @brief read counter value
+	 * @brief check if counter value is reached zero or after called recycle()
 	 *
-	 * @return rc_type counter value
+	 * @retval true counter is reached zero or after called recycle()
+	 * @retval false counter is not reached zero and before called recycle()
 	 */
 	bool is_sticky_or_recycled_zero( void ) const noexcept
 	{
@@ -188,6 +222,11 @@ private:
 	static constexpr rc_type is_zero_       = ~( std::numeric_limits<rc_type>::max() >> 1 );                            //<! 最上位ビットのみが立った値
 	static constexpr rc_type helped_        = ~( ( std::numeric_limits<rc_type>::max() >> 2 ) | is_zero_ );             //<! 最上位から2番目のみのビットが立った値
 	static constexpr rc_type recycled_zero_ = ~( ( std::numeric_limits<rc_type>::max() >> 3 ) | is_zero_ | helped_ );   //<! 最上位から3番目のみのビットが立った値
+
+	static constexpr bool is_overflow( rc_type pre_value )
+	{
+		return ( pre_value & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) >= max();
+	}
 
 	mutable std::atomic<rc_type> counter_ { recycled_zero_ };   //!< reference counter. mutable attribute is for read() member function
 };
@@ -235,7 +274,7 @@ struct sticky_counter_guard {
 					decrement_then_is_zero();   // Clean up current state
 				}
 			}
-			return *this;   // nothing to do
+			return *this;
 		}
 
 		decrement_then_is_zero();   // Clean up current state
