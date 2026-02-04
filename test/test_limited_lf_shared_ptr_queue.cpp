@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-#include "limited_lf_arrayheap.hpp"
+#include "lf_typed_heap.hpp"
 #include "limited_lf_shared_ptr.hpp"
 #include "limited_lf_shared_ptr_queue.hpp"
 

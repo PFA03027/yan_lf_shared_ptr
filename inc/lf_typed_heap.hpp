@@ -1,5 +1,5 @@
 /**
- * @file limited_lf_arrayheap.hpp
+ * @file lf_typed_heap.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
  * @brief
  * @version 0.1

@@ -16,7 +16,7 @@
 #include <optional>
 #include <type_traits>
 
-#include "limited_lf_arrayheap.hpp"
+#include "lf_typed_heap.hpp"
 #include "rc_sticky_counter.hpp"
 
 namespace rc {

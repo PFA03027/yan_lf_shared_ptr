@@ -16,7 +16,7 @@
 #include <thread>
 #include <vector>
 
-#include "limited_lf_arrayheap.hpp"
+#include "lf_typed_heap.hpp"
 
 #include <gtest/gtest.h>
 

@@ -12,7 +12,7 @@
 #ifndef LIMITED_LF_SHARED_PTR_HPP_
 #define LIMITED_LF_SHARED_PTR_HPP_
 
-#include "limited_lf_arrayheap.hpp"
+#include "lf_typed_heap.hpp"
 #include "rc_sticky_counter.hpp"
 
 namespace rc {
