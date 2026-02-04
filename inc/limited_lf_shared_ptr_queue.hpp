@@ -18,6 +18,7 @@
 
 #include "rc_sticky_counter.hpp"
 #include "typed_lfheap.hpp"
+#include "yan_lf_shared_ptr.hpp"
 
 namespace rc {
 namespace itl {

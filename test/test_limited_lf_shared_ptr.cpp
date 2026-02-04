@@ -9,7 +9,7 @@
  *
  */
 
-#include "limited_lf_shared_ptr.hpp"
+#include "yan_lf_shared_ptr.hpp"
 
 #include "test_comm.hpp"
 

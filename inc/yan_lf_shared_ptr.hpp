@@ -1,5 +1,5 @@
 /**
- * @file limited_lf_shared_ptr.hpp
+ * @file yan_lf_shared_ptr.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
  * @brief
  * @version 0.1
@@ -9,13 +9,13 @@
  *
  */
 
-#ifndef LIMITED_LF_SHARED_PTR_HPP_
-#define LIMITED_LF_SHARED_PTR_HPP_
+#ifndef YAN_LF_SHARED_PTR_HPP_
+#define YAN_LF_SHARED_PTR_HPP_
 
 #include "rc_sticky_counter.hpp"
 #include "typed_lfheap.hpp"
 
-namespace yan {
+namespace yan {   // yet another
 namespace itl {
 
 struct lf_shared_value_carrier_base {
@@ -170,4 +170,4 @@ limited_lf_shared_ptr<T> make_limited_lf_shared_ptr( Args&&... args )
 
 }   // namespace yan
 
-#endif   // LIMITED_LF_SHARED_PTR_HPP_
+#endif   // YAN_LF_SHARED_PTR_HPP_
