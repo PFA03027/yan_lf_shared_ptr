@@ -1,5 +1,5 @@
 /**
- * @file limited_lf_shared_ptr_queue.hpp
+ * @file shared_ptr_lf_queue.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
  * @brief
  * @version 0.1
@@ -47,7 +47,7 @@ struct queue_node {
 }   // namespace itl
 
 template <typename T, size_t ELEMNUM = 10000>
-class limited_lf_shared_ptr_queue {
+class shared_ptr_lf_queue {
 	// static_assert( std::is_trivially_copyable<T>::value, "T should be trivially copyable" );
 	// static_assert( std::is_default_constructible<T>::value, "T should be default constructible" );
 
@@ -64,7 +64,7 @@ public:
 	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
 	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_t;
 
-	~limited_lf_shared_ptr_queue()
+	~shared_ptr_lf_queue()
 	{
 		que_node_heap_element_ptr_t p_cur_node = ap_que_head_.exchange( nullptr );
 		if ( p_cur_node == nullptr ) {
@@ -100,7 +100,7 @@ public:
 			p_cur_node = p_nxt_node;
 		}
 	}
-	limited_lf_shared_ptr_queue( void )
+	shared_ptr_lf_queue( void )
 	  : ap_que_head_( que_node_heap_type::allocate() )
 	  , ap_que_tail_( ap_que_head_.load() )
 	{
@@ -112,10 +112,10 @@ public:
 		// 番兵ノードを準備する
 		p_cur_sentinel_node->emplace( nullptr );
 	}
-	limited_lf_shared_ptr_queue( const limited_lf_shared_ptr_queue& )            = delete;
-	limited_lf_shared_ptr_queue& operator=( const limited_lf_shared_ptr_queue& ) = delete;
-	limited_lf_shared_ptr_queue( limited_lf_shared_ptr_queue&& )                 = delete;
-	limited_lf_shared_ptr_queue& operator=( limited_lf_shared_ptr_queue&& )      = delete;
+	shared_ptr_lf_queue( const shared_ptr_lf_queue& )            = delete;
+	shared_ptr_lf_queue& operator=( const shared_ptr_lf_queue& ) = delete;
+	shared_ptr_lf_queue( shared_ptr_lf_queue&& )                 = delete;
+	shared_ptr_lf_queue& operator=( shared_ptr_lf_queue&& )      = delete;
 
 	std::optional<shared_ptr_type> push( const shared_ptr_type& push_sp_arg )
 	{

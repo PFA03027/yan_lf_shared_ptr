@@ -30,7 +30,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, CanDefaultConstruct )
 	static constexpr size_t QUEUE_SIZE = 100;
 
 	// Act
-	yan::limited_lf_shared_ptr_queue<NonTrivialType, QUEUE_SIZE> sut;
+	yan::shared_ptr_lf_queue<NonTrivialType, QUEUE_SIZE> sut;
 
 	// Assert
 }
@@ -38,8 +38,8 @@ TEST( TestRcLimitedLfSharedPtrQueue, CanDefaultConstruct )
 TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPush )
 {
 	// Arrange
-	yan::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	yan::shared_ptr_lf_queue<NonTrivialType> sut;
+	auto                                     sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 
 	// Act
 	auto ret = sut.push( sp_data );
@@ -51,7 +51,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPush )
 TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPop )
 {
 	// Arrange
-	yan::limited_lf_shared_ptr_queue<NonTrivialType> sut;
+	yan::shared_ptr_lf_queue<NonTrivialType> sut;
 
 	// Act
 	auto sp_ret = sut.try_pop();
@@ -63,9 +63,9 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPop )
 TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPop )
 {
 	// Arrange
-	yan::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
-	auto                                            ret     = sut.push( sp_data );
+	yan::shared_ptr_lf_queue<NonTrivialType> sut;
+	auto                                     sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto                                     ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 
 	// Act
@@ -79,9 +79,9 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPop )
 TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPushPopPop )
 {
 	// Arrange
-	yan::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
-	auto                                            ret     = sut.push( sp_data );
+	yan::shared_ptr_lf_queue<NonTrivialType> sut;
+	auto                                     sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto                                     ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 	sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 43U );
 	ret     = sut.push( sp_data );
@@ -104,7 +104,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
-	using que_type               = yan::limited_lf_shared_ptr_queue<NonTrivialType>;
+	using que_type               = yan::shared_ptr_lf_queue<NonTrivialType>;
 	using que_contents_heap_type = que_type::que_contents_heap_type;
 	using que_node_heap_type     = que_type::que_node_heap_type;
 
