@@ -9,8 +9,8 @@
  *
  */
 
-#ifndef LIMITED_LF_ARRAYHEAP_TYPE_T_HPP_
-#define LIMITED_LF_ARRAYHEAP_TYPE_T_HPP_
+#ifndef LF_TYPED_HEAP_HPP_
+#define LF_TYPED_HEAP_HPP_
 
 #include <array>
 #include <atomic>
@@ -23,8 +23,7 @@
 
 #include "rc_sticky_counter.hpp"
 
-namespace rc {
-namespace itl {
+namespace lfheap {
 
 /**
  * @brief heap element for limited_arrayheap
@@ -93,12 +92,10 @@ struct heap_element {
 	}
 };
 
-}   // namespace itl
-
 template <typename T, size_t ELEMNUM = 10000>
 struct limited_arrayheap {
-	using element_type          = itl::heap_element<T>;
-	using counter_guard_type    = counter_guard<std::atomic<size_t>>;
+	using element_type          = heap_element<T>;
+	using counter_guard_type    = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
@@ -110,7 +107,7 @@ struct limited_arrayheap {
 	static counter_guard_type get_counter_guard( element_type* p_elem )
 	{
 		size_t idx = elem_pointer_to_index( p_elem );
-		return counter_guard( array_rc_[idx] );
+		return rc::counter_guard( array_rc_[idx] );
 	}
 
 	static element_type* allocate( void )
@@ -304,8 +301,8 @@ private:
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
-				size_t        idx = elem_pointer_to_index( p_ans );
-				counter_guard tmp_rc_g( array_rc_[idx] );
+				size_t            idx = elem_pointer_to_index( p_ans );
+				rc::counter_guard tmp_rc_g( array_rc_[idx] );
 				if ( ap_free_elem_head_.load() == p_ans ) {
 					// カウンタ確保後も、p_ansが有効だったので、リファレンスカウンタの獲得は有効。
 					my_rc_g.swap( tmp_rc_g );   // ループを抜けた後もp_ansを参照するため、リファレンスカウンタを保持しているガード変数をループの外の変数に移動してから、ループを抜ける
@@ -393,7 +390,7 @@ private:
 	}
 
 	static std::array<std::atomic<size_t>, NUM>                array_rc_;                        //!< reference counter for each element in array_heap_
-	static std::array<itl::heap_element<T>, NUM>               array_heap_;                      //!< array_heap_ for each element
+	static std::array<heap_element<T>, NUM>                    array_heap_;                      //!< array_heap_ for each element
 	static std::atomic<size_t>                                 watermark_of_array_;              //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
 	static std::atomic<element_type*>                          ap_free_elem_head_;               //!< free list head pointer
 	static thread_local retired_fifo_list                      retired_elem_list_;               //!< thread-local variable to hold retired elements
@@ -405,7 +402,7 @@ private:
 template <typename T, size_t ELEMNUM>
 constinit std::array<std::atomic<size_t>, limited_arrayheap<T, ELEMNUM>::NUM> limited_arrayheap<T, ELEMNUM>::array_rc_;
 template <typename T, size_t ELEMNUM>
-constinit std::array<itl::heap_element<T>, limited_arrayheap<T, ELEMNUM>::NUM> limited_arrayheap<T, ELEMNUM>::array_heap_;
+constinit std::array<heap_element<T>, limited_arrayheap<T, ELEMNUM>::NUM> limited_arrayheap<T, ELEMNUM>::array_heap_;
 template <typename T, size_t ELEMNUM>
 std::atomic<size_t> limited_arrayheap<T, ELEMNUM>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
 template <typename T, size_t ELEMNUM>
@@ -425,7 +422,7 @@ void limited_arrayheap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
 		array_rc_[i].store( 0 /* , std::memory_order_release */ );   // reset reference counter
 	}
 	array_heap_.~array();
-	new ( &array_heap_ ) std::array<itl::heap_element<T>, NUM>();
+	new ( &array_heap_ ) std::array<heap_element<T>, NUM>();
 	watermark_of_array_.store( 0 /* , std::memory_order_release */ );
 	ap_free_elem_head_.store( nullptr /* , std::memory_order_release */ );
 	retired_elem_list_.clear();
@@ -436,6 +433,6 @@ void limited_arrayheap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
 	}
 }
 
-}   // namespace rc
+}   // namespace lfheap
 
-#endif
+#endif   // LF_TYPED_HEAP_HPP_

@@ -155,7 +155,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 	std::cout << "Total elements processed: " << total_count << std::endl;
 	std::cout << "Watermark of contents in Queue after high load: " << que_contents_heap_type::get_watermark() << std::endl;
 	std::cout << "Watermark of node in Queue after high load: " << que_node_heap_type::get_watermark() << std::endl;
-	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), que_contents_heap_type::NUM );
-	EXPECT_LT( rc::limited_arrayheap<NonTrivialType>::get_watermark(), que_node_heap_type::NUM );
+	EXPECT_LT( lfheap::limited_arrayheap<NonTrivialType>::get_watermark(), que_contents_heap_type::NUM );
+	EXPECT_LT( lfheap::limited_arrayheap<NonTrivialType>::get_watermark(), que_node_heap_type::NUM );
 }
 #endif

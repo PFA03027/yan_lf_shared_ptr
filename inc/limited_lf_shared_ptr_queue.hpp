@@ -53,12 +53,12 @@ class limited_lf_shared_ptr_queue {
 public:
 	using shared_ptr_type = limited_lf_shared_ptr<T>;
 
-	using que_contents_heap_type          = limited_arrayheap<shared_ptr_type, ELEMNUM>;
+	using que_contents_heap_type          = lfheap::limited_arrayheap<shared_ptr_type, ELEMNUM>;
 	using que_contents_heap_element_type  = typename que_contents_heap_type::element_type;
 	using que_contents_heap_element_ptr_t = que_contents_heap_element_type*;
 
 	using que_node_type                    = itl::queue_node<que_contents_heap_element_ptr_t>;
-	using que_node_heap_type               = limited_arrayheap<que_node_type, ELEMNUM>;
+	using que_node_heap_type               = lfheap::limited_arrayheap<que_node_type, ELEMNUM>;
 	using que_node_heap_element_type       = typename que_node_heap_type::element_type;
 	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
 	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_type;

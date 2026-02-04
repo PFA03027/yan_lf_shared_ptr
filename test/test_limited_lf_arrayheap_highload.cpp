@@ -25,7 +25,7 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 	// Arrange
 	constexpr size_t                                       NUM_THREADS = 20;
 	std::atomic<bool>                                      done { false };
-	std::atomic<rc::limited_arrayheap<int>::element_type*> duplicate_bug_check { nullptr };
+	std::atomic<lfheap::limited_arrayheap<int>::element_type*> duplicate_bug_check { nullptr };
 
 	// Act
 	std::vector<std::thread>         threads;
@@ -35,9 +35,9 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 			size_t count = 0;
 			while ( !done.load() ) {
 				count++;
-				rc::limited_arrayheap<int>::element_type* p_elem = nullptr;
+				lfheap::limited_arrayheap<int>::element_type* p_elem = nullptr;
 				try {
-					p_elem = rc::limited_arrayheap<int>::allocate();
+					p_elem = lfheap::limited_arrayheap<int>::allocate();
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during allocation: count = " << count << std::endl;
 					throw;
@@ -54,7 +54,7 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 				}
 				try {
 					duplicate_bug_check.store( nullptr );   // Reset for next iteration
-					rc::limited_arrayheap<int>::retire( p_elem );
+					lfheap::limited_arrayheap<int>::retire( p_elem );
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during retire: count = " << count << std::endl;
 					throw;
@@ -81,6 +81,6 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << rc::limited_arrayheap<int>::get_watermark() << std::endl;
-	EXPECT_LT( rc::limited_arrayheap<int>::get_watermark(), rc::limited_arrayheap<int>::NUM );
+	std::cout << "Watermark after high load: " << lfheap::limited_arrayheap<int>::get_watermark() << std::endl;
+	EXPECT_LT( lfheap::limited_arrayheap<int>::get_watermark(), lfheap::limited_arrayheap<int>::NUM );
 }
