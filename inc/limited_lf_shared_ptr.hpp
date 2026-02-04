@@ -12,8 +12,8 @@
 #ifndef LIMITED_LF_SHARED_PTR_HPP_
 #define LIMITED_LF_SHARED_PTR_HPP_
 
-#include "lf_typed_heap.hpp"
 #include "rc_sticky_counter.hpp"
+#include "typed_lfheap.hpp"
 
 namespace rc {
 namespace itl {

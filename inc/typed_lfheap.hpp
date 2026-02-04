@@ -1,5 +1,5 @@
 /**
- * @file lf_typed_heap.hpp
+ * @file typed_lfheap.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
  * @brief
  * @version 0.1
@@ -95,7 +95,7 @@ struct heap_element {
 template <typename T, size_t ELEMNUM = 10000>
 struct fixedarray_heap {
 	using element_type          = heap_element<T>;
-	using counter_guard_t    = rc::counter_guard<std::atomic<size_t>>;
+	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
@@ -292,7 +292,7 @@ private:
 
 	static std::pair<element_type*, counter_guard_t> try_pop_from_free_list( void )
 	{
-		element_type*      p_ans = nullptr;
+		element_type*   p_ans = nullptr;
 		counter_guard_t my_rc_g;
 		while ( true ) {
 			while ( true ) {

@@ -16,8 +16,8 @@
 #include <optional>
 #include <type_traits>
 
-#include "lf_typed_heap.hpp"
 #include "rc_sticky_counter.hpp"
+#include "typed_lfheap.hpp"
 
 namespace rc {
 namespace itl {

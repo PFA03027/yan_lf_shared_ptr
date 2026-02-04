@@ -9,7 +9,7 @@
  *
  */
 
-#include "lf_typed_heap.hpp"
+#include "typed_lfheap.hpp"
 
 #include "test_comm.hpp"
 
