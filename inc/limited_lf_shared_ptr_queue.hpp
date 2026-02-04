@@ -20,7 +20,7 @@
 #include "typed_lfheap.hpp"
 #include "yan_lf_shared_ptr.hpp"
 
-namespace rc {
+namespace yan {   // yet another
 namespace itl {
 
 template <typename T>
@@ -278,6 +278,6 @@ private:
 	std::atomic<que_node_heap_element_ptr_t> ap_que_tail_;
 };
 
-}   // namespace rc
+}   // namespace yan
 
 #endif
