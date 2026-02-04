@@ -60,8 +60,8 @@ TEST( LimitedLfSharedPtrHighLoad, CanHandleHighLoad )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << lfheap::limited_arrayheap<NonTrivialType>::get_watermark() << std::endl;
-	EXPECT_LT( lfheap::limited_arrayheap<NonTrivialType>::get_watermark(), lfheap::limited_arrayheap<NonTrivialType>::NUM );
+	std::cout << "Watermark after high load: " << lfheap::fixedarray_heap<NonTrivialType>::get_watermark() << std::endl;
+	EXPECT_LT( lfheap::fixedarray_heap<NonTrivialType>::get_watermark(), lfheap::fixedarray_heap<NonTrivialType>::NUM );
 }
 
 TEST( LimitedLfSharedPtrHighLoad, CanComparePerformanceWithStdSharedPtr )
