@@ -15,12 +15,12 @@
 #include "rc_sticky_counter.hpp"
 #include "typed_lfheap.hpp"
 
-namespace rc {
+namespace yan {
 namespace itl {
 
 struct lf_shared_value_carrier_base {
 	virtual ~lf_shared_value_carrier_base() = default;
-	sticky_counter rc_;   //!< v_の寿命管理用reference counter
+	rc::sticky_counter rc_;   //!< v_の寿命管理用reference counter
 };
 
 template <typename T>
@@ -153,8 +153,8 @@ private:
 	template <typename U, typename... Args>
 	friend limited_lf_shared_ptr<U> make_limited_lf_shared_ptr( Args&&... args );
 
-	element_type*                        p_elem_;     //!< pointer to the heap element that holds the value
-	sticky_counter_guard<sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
+	element_type*                                p_elem_;     //!< pointer to the heap element that holds the value
+	rc::sticky_counter_guard<rc::sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
 };
 
 template <typename T, typename... Args>
@@ -168,6 +168,6 @@ limited_lf_shared_ptr<T> make_limited_lf_shared_ptr( Args&&... args )
 	return limited_lf_shared_ptr<T>( ptr );
 }
 
-}   // namespace rc
+}   // namespace yan
 
 #endif   // LIMITED_LF_SHARED_PTR_HPP_

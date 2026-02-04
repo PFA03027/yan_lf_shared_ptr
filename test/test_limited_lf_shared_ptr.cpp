@@ -20,7 +20,7 @@ TEST( LimitedLfSharedPtr, CanConstructDestruct )
 	// Arrange
 
 	// Act
-	rc::limited_lf_shared_ptr<int> sut;
+	yan::limited_lf_shared_ptr<int> sut;
 
 	// Assert
 	EXPECT_FALSE( sut.is_valid() );
@@ -31,7 +31,7 @@ TEST( LimitedLfSharedPtr, CanMakeLimitedLfSharedPtrWithTrivialType_ThenReturnVal
 	// Arrange
 
 	// Act
-	auto sp_sut = rc::make_limited_lf_shared_ptr<int>( 42 );
+	auto sp_sut = yan::make_limited_lf_shared_ptr<int>( 42 );
 
 	// Assert
 	EXPECT_TRUE( sp_sut.is_valid() );
@@ -43,7 +43,7 @@ TEST( LimitedLfSharedPtr, CanMakeLimitedLfSharedPtrWithNonTrivialType_ThenReturn
 	// Arrange
 
 	// Act
-	auto sp_sut = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto sp_sut = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 
 	// Assert
 	EXPECT_TRUE( sp_sut.is_valid() );
@@ -54,11 +54,11 @@ TEST( LimitedLfSharedPtr, CanMakeLimitedLfSharedPtr_ThenReturnValidPointer )
 {
 	// Arrange
 	{
-		auto sp_dummy = rc::make_limited_lf_shared_ptr<int>( 41 );
+		auto sp_dummy = yan::make_limited_lf_shared_ptr<int>( 41 );
 	}
 
 	// Act
-	auto sp_sut = rc::make_limited_lf_shared_ptr<int>( 42 );
+	auto sp_sut = yan::make_limited_lf_shared_ptr<int>( 42 );
 
 	// Assert
 	EXPECT_TRUE( sp_sut.is_valid() );

@@ -51,7 +51,7 @@ class limited_lf_shared_ptr_queue {
 	// static_assert( std::is_default_constructible<T>::value, "T should be default constructible" );
 
 public:
-	using shared_ptr_type = limited_lf_shared_ptr<T>;
+	using shared_ptr_type = yan::limited_lf_shared_ptr<T>;
 
 	using que_contents_heap_type          = lfheap::fixedarray_heap<shared_ptr_type, ELEMNUM>;
 	using que_contents_heap_element_type  = typename que_contents_heap_type::element_type;

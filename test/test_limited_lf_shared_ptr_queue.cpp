@@ -39,7 +39,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPush )
 {
 	// Arrange
 	rc::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 
 	// Act
 	auto ret = sut.push( sp_data );
@@ -64,7 +64,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPop )
 {
 	// Arrange
 	rc::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 	auto                                            ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 
@@ -80,10 +80,10 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPushPopPop )
 {
 	// Arrange
 	rc::limited_lf_shared_ptr_queue<NonTrivialType> sut;
-	auto                                            sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
+	auto                                            sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 42U );
 	auto                                            ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
-	sp_data = rc::make_limited_lf_shared_ptr<NonTrivialType>( 43U );
+	sp_data = yan::make_limited_lf_shared_ptr<NonTrivialType>( 43U );
 	ret     = sut.push( sp_data );
 	EXPECT_FALSE( ret.has_value() );
 
@@ -119,7 +119,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 		std::packaged_task<size_t()> task( [&done, &sut]() {
 			size_t count = 0;
 			while ( !done.load() ) {
-				auto sp_elem = rc::make_limited_lf_shared_ptr<NonTrivialType>( count );   // Create shared pointer with value 42
+				auto sp_elem = yan::make_limited_lf_shared_ptr<NonTrivialType>( count );   // Create shared pointer with value 42
 				auto ret     = sut.push( std::move( sp_elem ) );
 				if ( ret.has_value() ) {
 					std::cerr << "Push failed unexpectedly, should not happen in high load test. count = " << count << std::endl;
