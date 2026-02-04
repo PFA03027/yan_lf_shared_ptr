@@ -20,7 +20,7 @@ TEST( LimitedLfSharedPtr, CanConstructDestruct )
 	// Arrange
 
 	// Act
-	yan::limited_lf_shared_ptr<int> sut;
+	yan::lf_shared_ptr<int> sut;
 
 	// Assert
 	EXPECT_FALSE( sut.is_valid() );
