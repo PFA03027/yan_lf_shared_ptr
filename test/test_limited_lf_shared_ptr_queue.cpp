@@ -54,7 +54,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPop )
 	yan::limited_lf_shared_ptr_queue<NonTrivialType> sut;
 
 	// Act
-	auto sp_ret = sut.pop();
+	auto sp_ret = sut.try_pop();
 
 	// Assert
 	EXPECT_FALSE( sp_ret.has_value() );
@@ -69,7 +69,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPop )
 	EXPECT_FALSE( ret.has_value() );
 
 	// Act
-	auto sp_ret = sut.pop();
+	auto sp_ret = sut.try_pop();
 
 	// Assert
 	ASSERT_TRUE( sp_ret.has_value() );
@@ -88,8 +88,8 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPushPopPop )
 	EXPECT_FALSE( ret.has_value() );
 
 	// Act
-	auto sp_ret1 = sut.pop();
-	auto sp_ret2 = sut.pop();
+	auto sp_ret1 = sut.try_pop();
+	auto sp_ret2 = sut.try_pop();
 
 	// Assert
 	ASSERT_TRUE( sp_ret1.has_value() );
@@ -125,7 +125,7 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 					std::cerr << "Push failed unexpectedly, should not happen in high load test. count = " << count << std::endl;
 					throw std::logic_error( "Push failed unexpectedly, should not happen in high load test. count = " + std::to_string( count ) );
 				}
-				ret = sut.pop();
+				ret = sut.try_pop();
 				if ( !ret.has_value() ) {
 					std::cerr << "Pop failed unexpectedly, should not happen in high load test. count = " << count << std::endl;
 					throw std::logic_error( "Pop failed unexpectedly, should not happen in high load test. count = " + std::to_string( count ) );

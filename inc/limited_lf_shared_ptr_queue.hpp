@@ -150,7 +150,7 @@ public:
 		return std::nullopt;
 	}
 
-	std::optional<shared_ptr_type> pop( void )
+	std::optional<shared_ptr_type> try_pop( void )
 	{
 		while ( true ) {
 			que_node_heap_element_ptr_t      p_expect_head_node = ap_que_head_.load();
