@@ -25,6 +25,8 @@
 
 namespace lfheap {
 
+constexpr size_t ELEMNUM = 10000;
+
 /**
  * @brief heap element for typed_pool_heap
  *
@@ -92,7 +94,7 @@ struct heap_element {
 	}
 };
 
-template <typename T, size_t ELEMNUM = 10000>
+template <typename T>
 struct typed_pool_heap {
 	using element_type          = heap_element<T>;
 	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
@@ -399,24 +401,24 @@ private:
 	static thread_local thread_local_retired_fifo_list_cleaner tl_retired_fifo_list_cleaner_;    //!< thread-local cleaner for retired elements list
 };
 
-template <typename T, size_t ELEMNUM>
-constinit std::array<std::atomic<size_t>, typed_pool_heap<T, ELEMNUM>::NUM> typed_pool_heap<T, ELEMNUM>::array_rc_;
-template <typename T, size_t ELEMNUM>
-constinit std::array<heap_element<T>, typed_pool_heap<T, ELEMNUM>::NUM> typed_pool_heap<T, ELEMNUM>::array_heap_;
-template <typename T, size_t ELEMNUM>
-std::atomic<size_t> typed_pool_heap<T, ELEMNUM>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
-template <typename T, size_t ELEMNUM>
-constinit std::atomic<typename typed_pool_heap<T, ELEMNUM>::element_type*> typed_pool_heap<T, ELEMNUM>::ap_free_elem_head_ { nullptr };
+template <typename T>
+constinit std::array<std::atomic<size_t>, typed_pool_heap<T>::NUM> typed_pool_heap<T>::array_rc_;
+template <typename T>
+constinit std::array<heap_element<T>, typed_pool_heap<T>::NUM> typed_pool_heap<T>::array_heap_;
+template <typename T>
+std::atomic<size_t> typed_pool_heap<T>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
+template <typename T>
+constinit std::atomic<typename typed_pool_heap<T>::element_type*> typed_pool_heap<T>::ap_free_elem_head_ { nullptr };
 
-template <typename T, size_t ELEMNUM>
-constinit std::mutex typed_pool_heap<T, ELEMNUM>::primary_retired_elem_list_mtx_;
-template <typename T, size_t ELEMNUM>
-constinit typed_pool_heap<T, ELEMNUM>::retired_fifo_list typed_pool_heap<T, ELEMNUM>::primary_retired_elem_list_;
-template <typename T, size_t ELEMNUM>
-constinit thread_local typed_pool_heap<T, ELEMNUM>::retired_fifo_list typed_pool_heap<T, ELEMNUM>::retired_elem_list_;
+template <typename T>
+constinit std::mutex typed_pool_heap<T>::primary_retired_elem_list_mtx_;
+template <typename T>
+constinit typed_pool_heap<T>::retired_fifo_list typed_pool_heap<T>::primary_retired_elem_list_;
+template <typename T>
+constinit thread_local typed_pool_heap<T>::retired_fifo_list typed_pool_heap<T>::retired_elem_list_;
 
-template <typename T, size_t ELEMNUM>
-void typed_pool_heap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
+template <typename T>
+void typed_pool_heap<T>::debug_destruction_and_regeneration( void )
 {
 	for ( size_t i = 0; i < NUM; i++ ) {
 		array_rc_[i].store( 0 /* , std::memory_order_release */ );   // reset reference counter

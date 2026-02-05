@@ -27,10 +27,9 @@
 TEST( TestRcLimitedLfSharedPtrQueue, CanDefaultConstruct )
 {
 	// Arrange
-	static constexpr size_t QUEUE_SIZE = 100;
 
 	// Act
-	yan::shared_ptr_lf_queue<NonTrivialType, QUEUE_SIZE> sut;
+	yan::shared_ptr_lf_queue<NonTrivialType> sut;
 
 	// Assert
 }

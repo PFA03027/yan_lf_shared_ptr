@@ -46,7 +46,7 @@ struct queue_node {
 
 }   // namespace itl
 
-template <typename T, size_t ELEMNUM = 10000>
+template <typename T>
 class shared_ptr_lf_queue {
 	// static_assert( std::is_trivially_copyable<T>::value, "T should be trivially copyable" );
 	// static_assert( std::is_default_constructible<T>::value, "T should be default constructible" );
@@ -54,12 +54,12 @@ class shared_ptr_lf_queue {
 public:
 	using shared_ptr_type = yan::lf_shared_ptr<T>;
 
-	using que_contents_heap_type          = lfheap::typed_pool_heap<shared_ptr_type, ELEMNUM>;
+	using que_contents_heap_type          = lfheap::typed_pool_heap<shared_ptr_type>;
 	using que_contents_heap_element_type  = typename que_contents_heap_type::element_type;
 	using que_contents_heap_element_ptr_t = que_contents_heap_element_type*;
 
 	using que_node_type                    = itl::queue_node<que_contents_heap_element_ptr_t>;
-	using que_node_heap_type               = lfheap::typed_pool_heap<que_node_type, ELEMNUM>;
+	using que_node_heap_type               = lfheap::typed_pool_heap<que_node_type>;
 	using que_node_heap_element_type       = typename que_node_heap_type::element_type;
 	using que_node_heap_element_ptr_t      = que_node_heap_element_type*;
 	using que_node_heap_element_rc_guard_t = typename que_node_heap_type::counter_guard_t;
