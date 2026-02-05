@@ -100,11 +100,13 @@ struct typed_pool_heap {
 	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
+#if 0
 	// ヒープ要素へのポインタと、カウンタ確保済みのcounter_guardを返す。
 	static std::pair<element_type*, counter_guard_t> allocate_with_guard( void )
 	{
 		return try_pop_with_rc_guard_from_free();
 	}
+#endif
 
 	static counter_guard_t get_counter_guard( element_type* p_elem )
 	{
@@ -271,6 +273,7 @@ private:
 		}
 	}
 
+#if 0
 	static std::pair<element_type*, counter_guard_t> try_pop_with_rc_guard_from_free( void )
 	{
 		{
@@ -291,6 +294,7 @@ private:
 			return std::pair<element_type*, counter_guard_t>( p_ans, counter_guard_t( array_rc_[idx] ) );
 		}
 	}
+#endif
 
 	static std::pair<element_type*, counter_guard_t> try_pop_from_free_list( void )
 	{
