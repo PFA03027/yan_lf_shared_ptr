@@ -136,7 +136,7 @@ public:
 
 private:
 	using carrier_type = itl::lf_shared_value_carrier<T>;
-	using heap_type    = lfheap::fixedarray_heap<carrier_type>;
+	using heap_type    = lfheap::typed_pool_heap<carrier_type>;
 	using element_type = lfheap::heap_element<carrier_type>;
 
 	lf_shared_ptr( element_type* p_elem_arg )

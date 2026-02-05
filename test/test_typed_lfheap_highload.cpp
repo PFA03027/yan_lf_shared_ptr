@@ -25,7 +25,7 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 	// Arrange
 	constexpr size_t                                         NUM_THREADS = 20;
 	std::atomic<bool>                                        done { false };
-	std::atomic<lfheap::fixedarray_heap<int>::element_type*> duplicate_bug_check { nullptr };
+	std::atomic<lfheap::typed_pool_heap<int>::element_type*> duplicate_bug_check { nullptr };
 
 	// Act
 	std::vector<std::thread>         threads;
@@ -35,26 +35,26 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 			size_t count = 0;
 			while ( !done.load() ) {
 				count++;
-				lfheap::fixedarray_heap<int>::element_type* p_elem = nullptr;
+				lfheap::typed_pool_heap<int>::element_type* p_elem = nullptr;
 				try {
-					p_elem = lfheap::fixedarray_heap<int>::allocate();
+					p_elem = lfheap::typed_pool_heap<int>::allocate();
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during allocation: count = " << count << std::endl;
 					throw;
 				}
 				if ( p_elem == nullptr ) {
 					// ヒープが枯渇してしまった場合を検出する。たいていは何らかのバグの副作用の結果として生じる。
-					std::cerr << "Exception by Failed to allocate element from fixedarray_heap: count = " << count << std::endl;
-					throw std::runtime_error( "Failed to allocate element from fixedarray_heap. current count = " + std::to_string( count ) );
+					std::cerr << "Exception by Failed to allocate element from typed_pool_heap: count = " << count << std::endl;
+					throw std::runtime_error( "Failed to allocate element from typed_pool_heap. current count = " + std::to_string( count ) );
 				}
 				if ( duplicate_bug_check.exchange( p_elem ) == p_elem ) {
 					// 別のスレッドで同じポインタが取得されてしまった場合、バグを検出する。
-					std::cerr << "Exception by Duplicate element detected in fixedarray_heap allocation: count = " << count << std::endl;
-					throw std::logic_error( "Duplicate element detected in fixedarray_heap allocation. current count = " + std::to_string( count ) );
+					std::cerr << "Exception by Duplicate element detected in typed_pool_heap allocation: count = " << count << std::endl;
+					throw std::logic_error( "Duplicate element detected in typed_pool_heap allocation. current count = " + std::to_string( count ) );
 				}
 				try {
 					duplicate_bug_check.store( nullptr );   // Reset for next iteration
-					lfheap::fixedarray_heap<int>::retire( p_elem );
+					lfheap::typed_pool_heap<int>::retire( p_elem );
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during retire: count = " << count << std::endl;
 					throw;
@@ -81,6 +81,6 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << lfheap::fixedarray_heap<int>::get_watermark() << std::endl;
-	EXPECT_LT( lfheap::fixedarray_heap<int>::get_watermark(), lfheap::fixedarray_heap<int>::NUM );
+	std::cout << "Watermark after high load: " << lfheap::typed_pool_heap<int>::get_watermark() << std::endl;
+	EXPECT_LT( lfheap::typed_pool_heap<int>::get_watermark(), lfheap::typed_pool_heap<int>::NUM );
 }

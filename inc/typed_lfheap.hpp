@@ -26,12 +26,12 @@
 namespace lfheap {
 
 /**
- * @brief heap element for fixedarray_heap
+ * @brief heap element for typed_pool_heap
  *
  * @tparam T value type
  *
  * @note
- * This heap element is used in fixedarray_heap.
+ * This heap element is used in typed_pool_heap.
  * It has a reference counter to manage the lifetime of the value.
  */
 template <typename T>
@@ -93,7 +93,7 @@ struct heap_element {
 };
 
 template <typename T, size_t ELEMNUM = 10000>
-struct fixedarray_heap {
+struct typed_pool_heap {
 	using element_type          = heap_element<T>;
 	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
@@ -400,23 +400,23 @@ private:
 };
 
 template <typename T, size_t ELEMNUM>
-constinit std::array<std::atomic<size_t>, fixedarray_heap<T, ELEMNUM>::NUM> fixedarray_heap<T, ELEMNUM>::array_rc_;
+constinit std::array<std::atomic<size_t>, typed_pool_heap<T, ELEMNUM>::NUM> typed_pool_heap<T, ELEMNUM>::array_rc_;
 template <typename T, size_t ELEMNUM>
-constinit std::array<heap_element<T>, fixedarray_heap<T, ELEMNUM>::NUM> fixedarray_heap<T, ELEMNUM>::array_heap_;
+constinit std::array<heap_element<T>, typed_pool_heap<T, ELEMNUM>::NUM> typed_pool_heap<T, ELEMNUM>::array_heap_;
 template <typename T, size_t ELEMNUM>
-std::atomic<size_t> fixedarray_heap<T, ELEMNUM>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
+std::atomic<size_t> typed_pool_heap<T, ELEMNUM>::watermark_of_array_ { 0 };   //<! watermark of array_heap_ for each element
 template <typename T, size_t ELEMNUM>
-constinit std::atomic<typename fixedarray_heap<T, ELEMNUM>::element_type*> fixedarray_heap<T, ELEMNUM>::ap_free_elem_head_ { nullptr };
+constinit std::atomic<typename typed_pool_heap<T, ELEMNUM>::element_type*> typed_pool_heap<T, ELEMNUM>::ap_free_elem_head_ { nullptr };
 
 template <typename T, size_t ELEMNUM>
-constinit std::mutex fixedarray_heap<T, ELEMNUM>::primary_retired_elem_list_mtx_;
+constinit std::mutex typed_pool_heap<T, ELEMNUM>::primary_retired_elem_list_mtx_;
 template <typename T, size_t ELEMNUM>
-constinit fixedarray_heap<T, ELEMNUM>::retired_fifo_list fixedarray_heap<T, ELEMNUM>::primary_retired_elem_list_;
+constinit typed_pool_heap<T, ELEMNUM>::retired_fifo_list typed_pool_heap<T, ELEMNUM>::primary_retired_elem_list_;
 template <typename T, size_t ELEMNUM>
-constinit thread_local fixedarray_heap<T, ELEMNUM>::retired_fifo_list fixedarray_heap<T, ELEMNUM>::retired_elem_list_;
+constinit thread_local typed_pool_heap<T, ELEMNUM>::retired_fifo_list typed_pool_heap<T, ELEMNUM>::retired_elem_list_;
 
 template <typename T, size_t ELEMNUM>
-void fixedarray_heap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
+void typed_pool_heap<T, ELEMNUM>::debug_destruction_and_regeneration( void )
 {
 	for ( size_t i = 0; i < NUM; i++ ) {
 		array_rc_[i].store( 0 /* , std::memory_order_release */ );   // reset reference counter

@@ -72,12 +72,12 @@ protected:
 	void SetUp() override
 	{
 		// Clear the heap before each test
-		lfheap::fixedarray_heap<int>::debug_destruction_and_regeneration();
+		lfheap::typed_pool_heap<int>::debug_destruction_and_regeneration();
 	}
 	void TearDown() override
 	{
 		// Optionally, you can clear the heap after each test
-		lfheap::fixedarray_heap<int>::debug_destruction_and_regeneration();
+		lfheap::typed_pool_heap<int>::debug_destruction_and_regeneration();
 	}
 };
 
@@ -86,7 +86,7 @@ TEST_F( RcLimitedArrayHeapWithTrivialType, FreeListIsEmpty_CanAllocate_ThenRetur
 	// Arrange
 
 	// Act
-	auto* p_elem = lfheap::fixedarray_heap<int>::allocate();
+	auto* p_elem = lfheap::typed_pool_heap<int>::allocate();
 
 	// Assert
 	EXPECT_NE( p_elem, nullptr );
@@ -95,12 +95,12 @@ TEST_F( RcLimitedArrayHeapWithTrivialType, FreeListIsEmpty_CanAllocate_ThenRetur
 TEST_F( RcLimitedArrayHeapWithTrivialType, FreeListIsNotEmpty_CanAllocate_ThenReturnNonNullptr )
 {
 	// Arrange
-	auto* p_elem = lfheap::fixedarray_heap<int>::allocate();
+	auto* p_elem = lfheap::typed_pool_heap<int>::allocate();
 	ASSERT_NE( p_elem, nullptr );
-	lfheap::fixedarray_heap<int>::retire( p_elem );
+	lfheap::typed_pool_heap<int>::retire( p_elem );
 
 	// Act
-	auto* p_sut = lfheap::fixedarray_heap<int>::allocate();
+	auto* p_sut = lfheap::typed_pool_heap<int>::allocate();
 
 	// Assert
 	EXPECT_NE( p_sut, nullptr );
