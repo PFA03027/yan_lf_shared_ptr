@@ -214,7 +214,7 @@ struct lf_shared_value_carrier_impl_in_place : public lf_shared_value_carrier_ba
 
 	void discard_self( void ) noexcept override
 	{
-		discard_my_class_carrier( this );
+		discard_my_class_carrier( this );   // 適切なAllocatorを使って自身を破棄するため、少々トリッキーなやり方で、破棄を行っている。
 	}
 
 	template <typename... Args>
@@ -280,7 +280,7 @@ struct lf_shared_value_carrier_impl_pointer_with_deleter : public lf_shared_valu
 
 	void discard_self( void ) noexcept override
 	{
-		discard_my_class_carrier( this );
+		discard_my_class_carrier( this );   // 適切なAllocatorを使って自身を破棄するため、少々トリッキーなやり方で、破棄を行っている。
 	}
 
 	static lf_shared_value_carrier_impl_pointer_with_deleter* create_my_class_carrier( Alloc a, value_type* p_value_arg, deleter_type deleter_arg );
@@ -320,6 +320,16 @@ void lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>::disca
 
 }   // namespace itl
 
+/**
+ * @brief lock-free shared pointer
+ *
+ * This class provides a lock-free shared pointer implementation that manages the lifetime of an object through reference counting.
+ * And reference counter is wait-free implemented by wait-free sticky counter.
+ *
+ * If deleter, Allocator and constructor/destructor of T are also lock-free, then lf_shared_ptr is lock-free.
+ *
+ * @tparam T type to reference
+ */
 template <typename T>
 class lf_shared_ptr {
 public:
@@ -561,9 +571,9 @@ private:
 	}
 
 	template <typename U, typename... Args>
-	friend lf_shared_ptr<U> make_lf_shared_ptr( Args&&... args );
+	friend lf_shared_ptr<U> make_lf_shared( Args&&... args );
 	template <typename U, typename Alloc, typename... Args>
-	friend lf_shared_ptr<U> allocate_lf_shared_ptr( Alloc alloc, Args&&... args );
+	friend lf_shared_ptr<U> allocate_lf_shared( Alloc alloc, Args&&... args );
 
 	itl::lf_shared_value_carrier_base*           p_carrier_;          //!< pointer to the value carrier
 	rc::sticky_counter_guard<rc::sticky_counter> carrier_rc_guard_;   //!< reference counter guard to manage the lifetime of the carrier
@@ -572,7 +582,7 @@ private:
 };
 
 template <typename T, typename... Args>
-lf_shared_ptr<T> make_lf_shared_ptr( Args&&... args )
+lf_shared_ptr<T> make_lf_shared( Args&&... args )
 {
 	auto                                             p_impl_carrier = itl::lf_shared_value_carrier_impl_in_place<T, std::allocator<T>>::create_my_class_carrier( std::allocator<T>(), std::forward<Args>( args )... );
 	T*                                               p_value        = &( p_impl_carrier->v_ );
@@ -581,7 +591,7 @@ lf_shared_ptr<T> make_lf_shared_ptr( Args&&... args )
 }
 
 template <typename T, typename Alloc, typename... Args>
-lf_shared_ptr<T> allocate_lf_shared_ptr( Alloc alloc, Args&&... args )
+lf_shared_ptr<T> allocate_lf_shared( Alloc alloc, Args&&... args )
 {
 	auto                                             p_impl_carrier = itl::lf_shared_value_carrier_impl_in_place<T, Alloc>::create_my_class_carrier( alloc, std::forward<Args>( args )... );
 	T*                                               p_value        = &( p_impl_carrier->v_ );

@@ -500,13 +500,14 @@ private:
 
 	static index_t value_pointer_to_index( value_type* p_value )
 	{
-		if ( p_value < &( array_heap_[0].v_ ) ) {
+		uintptr_t addr_p_value = reinterpret_cast<uintptr_t>( p_value );
+		uintptr_t addr_top     = reinterpret_cast<uintptr_t>( &( array_heap_[0] ) );
+		if ( addr_p_value < addr_top ) {
 			throw std::logic_error( "argument p_value does not belong to array_heap_" );
 		}
 
-		auto    tmp_offset = offsetof( element_type, v_ );
-		auto    p_elem     = reinterpret_cast<element_type*>( reinterpret_cast<uintptr_t>( p_value ) - tmp_offset );
-		index_t ans        = static_cast<index_t>( p_elem - &( array_heap_[0] ) );
+		uintptr_t addr_diff = addr_p_value - addr_top;
+		index_t   ans       = static_cast<index_t>( addr_diff / sizeof( array_heap_[0] ) );
 		if ( ans >= NUM ) {
 			throw std::logic_error( "argument p_value does not belong to array_heap_" );
 		}
