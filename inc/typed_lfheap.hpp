@@ -845,7 +845,13 @@ struct deleter_via_typed_pool_heap2 {
 		if ( p == nullptr ) {
 			return;
 		}
-		typed_pool_heap2<T>().deallocate( p, 1 );
+
+		using allocator_type        = typed_pool_heap2<T>;
+		using allocator_traits_type = std::allocator_traits<allocator_type>;
+
+		allocator_type tmp_alloc;
+		allocator_traits_type::destroy( tmp_alloc, p );
+		allocator_traits_type::deallocate( tmp_alloc, p, 1 );
 	}
 };
 

@@ -56,4 +56,6 @@ TEST( YanLFSharedPtrWithTypedPoolHeap, CanConstruct )
 	// Assert
 	EXPECT_TRUE( sp_sut );
 	EXPECT_EQ( sp_sut->get_value(), 42 );
+
+	sp_sut.reset();
 }
