@@ -231,7 +231,7 @@ lf_shared_value_carrier_impl_in_place<T, Alloc>* lf_shared_value_carrier_impl_in
 	using allocator_type        = typename std::allocator_traits<Alloc>::template rebind_alloc<lf_shared_value_carrier_impl_in_place<T, Alloc>>;
 	using allocator_traits_type = std::allocator_traits<allocator_type>;
 
-	allocator_type tmp_alloc;
+	allocator_type tmp_alloc( a );
 
 	lf_shared_value_carrier_impl_in_place<T, Alloc>* p_new = allocator_traits_type::allocate( tmp_alloc, 1 );
 	try {
@@ -249,7 +249,7 @@ void lf_shared_value_carrier_impl_in_place<T, Alloc>::discard_my_class_carrier( 
 	using allocator_type        = typename std::allocator_traits<Alloc>::template rebind_alloc<lf_shared_value_carrier_impl_in_place<T, Alloc>>;
 	using allocator_traits_type = std::allocator_traits<allocator_type>;
 
-	allocator_type tmp_alloc;
+	allocator_type tmp_alloc( p_discard_target->allocator_ );
 	allocator_traits_type::destroy( tmp_alloc, p_discard_target );
 	allocator_traits_type::deallocate( tmp_alloc, p_discard_target, 1 );
 }
@@ -295,7 +295,7 @@ lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>* lf_shared_
 	using allocator_type        = typename std::allocator_traits<Alloc>::template rebind_alloc<lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>>;
 	using allocator_traits_type = std::allocator_traits<allocator_type>;
 
-	allocator_type tmp_alloc;
+	allocator_type tmp_alloc( a );
 
 	lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>* p_new = allocator_traits_type::allocate( tmp_alloc, 1 );
 	try {
@@ -313,7 +313,7 @@ void lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>::disca
 	using allocator_type        = typename std::allocator_traits<Alloc>::template rebind_alloc<lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>>;
 	using allocator_traits_type = std::allocator_traits<allocator_type>;
 
-	allocator_type tmp_alloc;
+	allocator_type tmp_alloc( p_discard_target->allocator_ );
 	allocator_traits_type::destroy( tmp_alloc, p_discard_target );
 	allocator_traits_type::deallocate( tmp_alloc, p_discard_target, 1 );
 }
