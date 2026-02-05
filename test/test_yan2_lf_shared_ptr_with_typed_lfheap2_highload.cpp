@@ -70,7 +70,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << yan2::test_get_lf_shared_ptr_watermark<NonTrivialType, AllocType>() << std::endl;
+	std::cout << "Watermark after high load: " << test_get_lf_shared_ptr_watermark<NonTrivialType, AllocType>() << std::endl;
 	EXPECT_LT( lfheap::typed_pool_heap<NonTrivialType>::get_watermark(), lfheap::typed_pool_heap<NonTrivialType>::NUM );
 }
 
@@ -115,7 +115,45 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 {
 	// Arrange
 	std::atomic<bool> done { false };
-	using AllocType = lfheap::typed_pool_heap2<NonTrivialType>;
+
+	// Act
+	std::vector<std::thread>         threads;
+	std::vector<std::future<size_t>> results;
+	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
+		std::packaged_task<size_t()> task( [&done]() {
+			size_t count = 0;
+			while ( !done.load() ) {
+				auto sp_elem = yan2::make_lf_shared<uint32_t>( 42U );   // Create shared pointer with value 42
+				count++;
+			}
+			return count;
+		} );   // 非同期実行する関数を登録する
+		results.emplace_back( task.get_future() );
+
+		threads.emplace_back( std::move( task ) );
+	}
+	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
+	done.store( true );                                         // 全スレッドに終了を通知する
+
+	// Assert
+	for ( auto& t : threads ) {
+		t.join();
+	}
+	size_t total_count = 0;
+	for ( auto& r : results ) {
+		size_t ret_count;
+		EXPECT_NO_THROW( ret_count = r.get() );
+		EXPECT_GT( ret_count, 0 );   // 各スレッドが少なくとも1つの要素を処理したことを確認する
+		total_count += ret_count;
+	}
+	std::cout << "Total elements processed: " << total_count << std::endl;
+}
+
+TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcSharedPtrWithAlloc )
+{
+	// Arrange
+	std::atomic<bool> done { false };
+	using AllocType = lfheap::typed_pool_heap2<uint32_t>;
 	AllocType::debug_destruction_and_regeneration();
 	AllocType alloc;
 
@@ -150,6 +188,6 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << yan2::test_get_lf_shared_ptr_watermark<NonTrivialType, AllocType>() << std::endl;
+	std::cout << "Watermark after high load: " << test_get_lf_shared_ptr_watermark<uint32_t, AllocType>() << std::endl;
 }
 #endif

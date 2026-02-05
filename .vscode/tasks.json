@@ -40,6 +40,16 @@
 				"kind": "build",
 				// "isDefault": true
 			}
+		},
+		{
+			"label": "make test",
+			"type": "shell",
+			"command": "make test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
 		}
 	]
 }
