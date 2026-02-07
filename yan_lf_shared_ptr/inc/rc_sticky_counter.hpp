@@ -243,14 +243,18 @@ using sticky_counter = basic_sticky_counter<uint64_t>;
  */
 template <typename SC>
 struct sticky_counter_guard {
+#ifdef TEST_ENABLE_LOGICCHECKER
 	~sticky_counter_guard()
 	{
-		if ( decrement_then_is_zero() ) {
+		if ( is_owns_count_ ) {
 			exit( 1 );
-			// decrement_then_is_zero()がtrueとなったのに、該当カウンタに対する処置が行われないまま情報がロストすることを意味する。
+			// decrement_then_is_zero()が呼ばれていないので、このクラスの使い方が間違っている。
 			// よって、不具合につながるので、異常を検出できるようにexit(1)を呼び出す。
 		}
 	}
+#else
+	~sticky_counter_guard() = default;
+#endif
 	constexpr sticky_counter_guard( void ) noexcept
 	  : p_sc_( nullptr ), is_owns_count_( false )
 	{
@@ -327,7 +331,8 @@ struct sticky_counter_guard {
 #endif
 
 	explicit sticky_counter_guard( SC& sc_ref ) noexcept
-	  : p_sc_( &sc_ref ), is_owns_count_( p_sc_->increment_if_not_zero() )
+	  : p_sc_( &sc_ref )
+	  , is_owns_count_( p_sc_->increment_if_not_zero() )
 	{
 	}
 

@@ -74,10 +74,11 @@ coverage: clean
 	genhtml --branch-coverage -o OUTPUT -p . -f tmp.info
 
 profile: clean
+	-rm -f ${BUILD_DIR}/gmon.out
 	set -e; \
 	make BUILD_CONFIG=gprof BUILD_TYPE=Release build-test;  \
 	cd ${BUILD_DIR}; \
-	./test/test_typeT_lf_heap --gtest_filter=YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithRcSharedPtr; \
+	./test/test_typeT_lf_heap --gtest_filter=YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithRcSharedPtr:YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithStdSharedPtr; \
 	gprof ./test/test_typeT_lf_heap ./gmon.out > ./prof.out.txt
 
 sanitizer:
