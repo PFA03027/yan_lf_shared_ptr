@@ -25,12 +25,12 @@ target_link_libraries(${EXEC_TARGET} yan::lf_shared_ptr GTest::gtest GTest::gtes
 add_dependencies(build-test ${EXEC_TARGET})
 add_test(NAME ${EXEC_TARGET} COMMAND $<TARGET_FILE:${EXEC_TARGET}>)
 
-# compile option
+# compile option defined if Build Type is Debug
 # ENABLE_STICKY_COUNTER_OVERFLOW_CHECK
-target_compile_definitions(${EXEC_TARGET} PUBLIC ENABLE_STICKY_COUNTER_OVERFLOW_CHECK)
+target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:ENABLE_STICKY_COUNTER_OVERFLOW_CHECK>)
 #
 # ENABLE_STICKY_COUNTER_LOGIC_CHECK
-target_compile_definitions(${EXEC_TARGET} PUBLIC ENABLE_STICKY_COUNTER_LOGIC_CHECK)
+target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:ENABLE_STICKY_COUNTER_LOGIC_CHECK>)
 #
 # TEST_ENABLE_LOGICCHECKER
-target_compile_definitions(${EXEC_TARGET} PUBLIC TEST_ENABLE_LOGICCHECKER)
+target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:TEST_ENABLE_LOGICCHECKER>)
