@@ -18,9 +18,9 @@ set(EXEC_TARGET test_typeT_lf_heap)
 file(GLOB SOURCES *.cpp )
 
 add_executable(${EXEC_TARGET} EXCLUDE_FROM_ALL ${SOURCES})
-target_compile_features(${EXEC_TARGET} PRIVATE cxx_std_20)
+target_compile_features(${EXEC_TARGET} PRIVATE cxx_std_20) #  -std=c++20
 target_include_directories( ${EXEC_TARGET}  PRIVATE ../inc )
-target_compile_options(${EXEC_TARGET} PUBLIC  -Wall -Wconversion -Wsign-conversion -Werror  -DTEST_ENABLE_LOGICCHECKER) #  -std=c++20
+target_compile_options(${EXEC_TARGET} PUBLIC  -Wall -Wconversion -Wsign-conversion -Werror)
 target_link_libraries(${EXEC_TARGET} gtest gtest_main )
 add_dependencies(build-test ${EXEC_TARGET})
 add_test(NAME ${EXEC_TARGET} COMMAND $<TARGET_FILE:${EXEC_TARGET}>)
