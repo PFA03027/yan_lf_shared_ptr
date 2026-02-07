@@ -423,9 +423,8 @@ struct heap_element {
 	  : dummy_() {}
 };
 
-template <typename T>
 struct heap_element_mgrinfo {
-	std::atomic<size_t>                rc_;                   //!< heap_element_mgrinfo2を参照中を示すreference counter
+	std::atomic<size_t>                rc_;                   //!< heap_element_mgrinfoを参照中を示すreference counter
 	std::atomic<heap_element_mgrinfo*> ap_free_stack_next_;   //!< freeリスト用に使われるnextポインタ
 	heap_element_mgrinfo*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
 
@@ -458,9 +457,6 @@ struct typed_pool_heap {
 	using difference_type                        = ptrdiff_t;
 
 	// 機能実装用
-	using element_type          = itl::heap_element<T>;
-	using mgr_info_type         = itl::heap_element_mgrinfo<T>;
-	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	~typed_pool_heap()                                 = default;
@@ -504,7 +500,10 @@ struct typed_pool_heap {
 	static void debug_destruction_and_regeneration( void );
 
 private:
-	using index_t = size_t;
+	using index_t         = size_t;
+	using element_type    = itl::heap_element<T>;
+	using mgr_info_type   = itl::heap_element_mgrinfo;
+	using counter_guard_t = rc::counter_guard<std::atomic<size_t>>;
 
 	static index_t value_pointer_to_index( value_type* p_value )
 	{
