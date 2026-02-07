@@ -11,6 +11,7 @@
 
 #include <atomic>
 #include <future>
+#include <latch>
 #include <thread>
 #include <vector>
 
@@ -33,15 +34,16 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 {
 	// Arrange
 	std::atomic<bool> done { false };
+	std::latch        start_latch( 1 + NUM_THREADS );
 	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
 	AllocType::debug_destruction_and_regeneration();
 	AllocType alloc;
 
-	// Act
 	std::vector<std::thread>         threads;
 	std::vector<std::future<size_t>> results;
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
-		std::packaged_task<size_t()> task( [&done, alloc]() {
+		std::packaged_task<size_t()> task( [&done, &start_latch, alloc]() {
+			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
 				auto sp_elem = yan2::allocate_lf_shared<NonTrivialType>( alloc, 42U );   // Create shared pointer with value 42
@@ -55,6 +57,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 
 		threads.emplace_back( std::move( task ) );
 	}
+
+	// Act
+	start_latch.arrive_and_wait();
 	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
 	done.store( true );                                         // 全スレッドに終了を通知する
 
@@ -78,12 +83,13 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithStdShare
 {
 	// Arrange
 	std::atomic<bool> done { false };
+	std::latch        start_latch( 1 + NUM_THREADS );
 
-	// Act
 	std::vector<std::thread>         threads;
 	std::vector<std::future<size_t>> results;
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
-		std::packaged_task<size_t()> task( [&done]() {
+		std::packaged_task<size_t()> task( [&done, &start_latch]() {
+			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
 				auto sp_elem = std::make_shared<uint32_t>( 42U );   // Create shared pointer with value 42
@@ -95,6 +101,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithStdShare
 
 		threads.emplace_back( std::move( task ) );
 	}
+
+	// Act
+	start_latch.arrive_and_wait();
 	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
 	done.store( true );                                         // 全スレッドに終了を通知する
 
@@ -115,12 +124,13 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 {
 	// Arrange
 	std::atomic<bool> done { false };
+	std::latch        start_latch( 1 + NUM_THREADS );
 
-	// Act
 	std::vector<std::thread>         threads;
 	std::vector<std::future<size_t>> results;
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
-		std::packaged_task<size_t()> task( [&done]() {
+		std::packaged_task<size_t()> task( [&done, &start_latch]() {
+			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
 				auto sp_elem = yan2::make_lf_shared<uint32_t>( 42U );   // Create shared pointer with value 42
@@ -132,6 +142,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 
 		threads.emplace_back( std::move( task ) );
 	}
+
+	// Act
+	start_latch.arrive_and_wait();
 	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
 	done.store( true );                                         // 全スレッドに終了を通知する
 
@@ -153,15 +166,16 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 {
 	// Arrange
 	std::atomic<bool> done { false };
+	std::latch        start_latch( 1 + NUM_THREADS );
 	using AllocType = lfheap2::typed_pool_heap<uint32_t>;
 	AllocType::debug_destruction_and_regeneration();
 	AllocType alloc;
 
-	// Act
 	std::vector<std::thread>         threads;
 	std::vector<std::future<size_t>> results;
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
-		std::packaged_task<size_t()> task( [&done, alloc]() {
+		std::packaged_task<size_t()> task( [&done, &start_latch, alloc]() {
+			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
 				auto sp_elem = yan2::allocate_lf_shared<uint32_t>( alloc, 42U );   // Create shared pointer with value 42
@@ -173,6 +187,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 
 		threads.emplace_back( std::move( task ) );
 	}
+
+	// Act
+	start_latch.arrive_and_wait();
 	std::this_thread::sleep_for( std::chrono::seconds( 1 ) );   // 1秒間実行する
 	done.store( true );                                         // 全スレッドに終了を通知する
 
