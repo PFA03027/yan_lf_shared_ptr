@@ -20,7 +20,7 @@ TEST( Lfheap2HeapElementWithTrivialType, CanConstructDestruct )
 	// Arrange
 
 	// Act
-	lfheap2::heap_element<int> sut;
+	lfheap2::itl::heap_element<int> sut;
 
 	// Assert
 }
@@ -30,7 +30,7 @@ TEST( Lfheap2HeapElementWithNonTrivialType, CanConstructDestruct )
 	// Arrange
 
 	// Act
-	lfheap2::heap_element<NonTrivialType> sut;
+	lfheap2::itl::heap_element<NonTrivialType> sut;
 
 	// Assert
 }

@@ -405,17 +405,7 @@ void typed_pool_heap<T>::debug_destruction_and_regeneration( void )
 
 namespace lfheap2 {
 
-constexpr size_t ELEMNUM = 10000;
-
-class typed_pool_bad_alloc : public std::bad_alloc {
-public:
-	const char* what( void ) const noexcept override
-	{
-		// 内部状態を調べて、より詳細なエラーメッセージを返すことができるようにする予定。
-		return "typed_pool_heap: memory allocation failed";
-	}
-};
-
+namespace itl {
 template <typename T>
 struct heap_element {
 	using value_type = T;
@@ -446,6 +436,18 @@ struct heap_element_mgrinfo {
 	{
 	}
 };
+}   // namespace itl
+
+constexpr size_t ELEMNUM = 10000;
+
+class typed_pool_bad_alloc : public std::bad_alloc {
+public:
+	const char* what( void ) const noexcept override
+	{
+		// 内部状態を調べて、より詳細なエラーメッセージを返すことができるようにする予定。
+		return "typed_pool_heap: memory allocation failed";
+	}
+};
 
 template <typename T>
 struct typed_pool_heap {
@@ -456,8 +458,8 @@ struct typed_pool_heap {
 	using difference_type                        = ptrdiff_t;
 
 	// 機能実装用
-	using element_type          = heap_element<T>;
-	using mgr_info_type         = heap_element_mgrinfo<T>;
+	using element_type          = itl::heap_element<T>;
+	using mgr_info_type         = itl::heap_element_mgrinfo<T>;
 	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
