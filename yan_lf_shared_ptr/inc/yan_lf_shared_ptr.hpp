@@ -22,19 +22,15 @@
 namespace yan {   // yet another
 namespace itl {
 
-struct lf_shared_value_carrier_base {
-	virtual ~lf_shared_value_carrier_base() = default;
-	rc::sticky_counter rc_;   //!< v_の寿命管理用reference counter
-};
-
 template <typename T>
-struct lf_shared_value_carrier : public lf_shared_value_carrier_base {
+struct lf_shared_value_carrier {
 	using value_type = T;
-	value_type v_;
+	rc::sticky_counter rc_;   //!< v_の寿命管理用reference counter
+	value_type         v_;
 
 	template <typename... Args, typename std::enable_if<std::is_constructible<T, Args&&...>::value>::type* = nullptr>
 	lf_shared_value_carrier( Args&&... args ) noexcept( std::is_nothrow_constructible<T>::value )
-	  : lf_shared_value_carrier_base()
+	  : rc_()
 	  , v_( std::forward<Args>( args )... )
 	{
 	}
@@ -58,14 +54,16 @@ public:
 	lf_shared_ptr( const lf_shared_ptr& other )
 	  : p_elem_( other.p_elem_ )
 	{
-		if ( p_elem_ != nullptr ) {
-			bool ret = p_elem_->ref().rc_.increment_if_not_zero();
-			if ( !ret ) {
+		if ( p_elem_ == nullptr ) {
+			return;
+		}
+
+		bool ret = p_elem_->ref().rc_.increment_if_not_zero();
+		if ( !ret ) {
 #ifdef TEST_ENABLE_LOGICCHECKER
-				throw std::logic_error( "lf_shared_ptr: failed to acquire reference count." );
+			throw std::logic_error( "lf_shared_ptr: failed to acquire reference count." );
 #else
 #endif
-			}
 		}
 	}
 
@@ -155,13 +153,6 @@ private:
 	lf_shared_ptr( element_type* p_elem_arg )
 	  : p_elem_( p_elem_arg )
 	{
-		bool ret = p_elem_->ref().rc_.increment_if_not_zero();
-		if ( !ret ) {
-#ifdef TEST_ENABLE_LOGICCHECKER
-			throw std::logic_error( "lf_shared_ptr: failed to acquire reference count." );
-#else
-#endif
-		}
 	}
 
 	template <typename U, typename... Args>
@@ -191,8 +182,8 @@ struct lf_shared_value_carrier_base {
 	virtual void destruct_value( void ) noexcept = 0;
 	virtual void discard_self( void ) noexcept   = 0;
 
-	rc::sticky_counter carrier_rc_ { 1 };   //!< carrier自身の寿命管理用reference counter
-	rc::sticky_counter value_rc_ { 1 };     //!< v_の有効性管理用reference counter
+	rc::sticky_counter carrier_rc_;   //!< carrier自身の寿命管理用reference counter
+	rc::sticky_counter value_rc_;     //!< v_の有効性管理用reference counter
 };
 
 template <typename T, typename Alloc>

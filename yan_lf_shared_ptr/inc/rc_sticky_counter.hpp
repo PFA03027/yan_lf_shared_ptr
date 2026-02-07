@@ -47,19 +47,6 @@ struct basic_sticky_counter {
 	static_assert( std::is_unsigned<T>::value, "T should be unsigned" );
 	using rc_type = T;
 
-	// カウンタ0で初期化するコンストラクタ
-	basic_sticky_counter( void ) noexcept
-	  : counter_( 0 )
-	{
-	}
-
-	// カウンタ１で初期化するコンストラクタ
-	// 引数はコンストラクタを区別するためのダミー型
-	explicit basic_sticky_counter( rc_type ) noexcept
-	  : counter_( 1 )
-	{
-	}
-
 	/**
 	 * @brief increment counter if it is not zero
 	 *
@@ -97,8 +84,8 @@ struct basic_sticky_counter {
 	/**
 	 * @brief decrement counter
 	 *
-	 * @pre increment_if_not_zero()の戻り値がtrueであること。
-	 * @pre decrement_then_is_zero()の呼び出し回数が、increment_if_not_zero()の戻り値がtrueである回数以下であること。
+	 * @pre decrement_then_is_zero()の呼び出し回数が、increment_if_not_zero()の戻り値がtrueである回数+1以下(*)であること。
+	 * (*)このカウンタの初期値を1としているため、コンストラクタ呼び出し直後にdecrement_then_is_zero()を1回呼び出すことが可能である。
 	 * この事前条件は、increment_if_not_zero()の戻り値がtrueであった呼び出しとdecrement_then_is_zero()の呼び出しが対称関係であることの保証を要求している。
 	 *
 	 * @return true counter value reatched to zero after decrement of caller thread
@@ -187,7 +174,7 @@ private:
 		return ( pre_value & ( ~( is_zero_ | helped_ ) ) ) >= max();
 	}
 
-	mutable std::atomic<rc_type> counter_;   //!< reference counter. mutable attribute is for read() member function
+	mutable std::atomic<rc_type> counter_ { 1 };   //!< reference counter. initial value is 1. mutable attribute is for read() member function
 };
 
 using sticky_counter = basic_sticky_counter<uint64_t>;
