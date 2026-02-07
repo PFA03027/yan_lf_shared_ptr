@@ -341,28 +341,30 @@ public:
 		if ( p_carrier_ == nullptr ) {
 			return;   // nothing to do
 		}
-		if ( value_rc_guard_.decrement_then_is_zero() ) {   // decrement the reference count
+		if ( p_carrier_->value_rc_.decrement_then_is_zero() ) {   // decrement the reference count
 			p_carrier_->destruct_value();
 		}
-		if ( carrier_rc_guard_.decrement_then_is_zero() ) {
+		if ( p_carrier_->carrier_rc_.decrement_then_is_zero() ) {
 			p_carrier_->discard_self();
 		}
 	}
 
 	constexpr lf_shared_ptr( void )
 	  : p_carrier_( nullptr )
-	  , carrier_rc_guard_()
-	  , value_rc_guard_()
 	  , p_elem_( nullptr )
 	{
 	}
 
 	lf_shared_ptr( const lf_shared_ptr& other )
 	  : p_carrier_( other.p_carrier_ )
-	  , carrier_rc_guard_( other.carrier_rc_guard_ )
-	  , value_rc_guard_( other.value_rc_guard_ )
 	  , p_elem_( other.p_elem_ )
 	{
+		if ( p_carrier_ == nullptr ) {
+			return;   // nothing to do
+		}
+
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	lf_shared_ptr& operator=( const lf_shared_ptr& other )
@@ -377,8 +379,6 @@ public:
 
 	lf_shared_ptr( lf_shared_ptr&& other ) noexcept
 	  : p_carrier_( other.p_carrier_ )
-	  , carrier_rc_guard_( std::move( other.carrier_rc_guard_ ) )
-	  , value_rc_guard_( std::move( other.value_rc_guard_ ) )
 	  , p_elem_( other.p_elem_ )
 	{
 		other.p_carrier_ = nullptr;
@@ -398,78 +398,78 @@ public:
 	void swap( lf_shared_ptr& other ) noexcept
 	{
 		std::swap( p_carrier_, other.p_carrier_ );
-		carrier_rc_guard_.swap( other.carrier_rc_guard_ );
-		value_rc_guard_.swap( other.value_rc_guard_ );
 		std::swap( p_elem_, other.p_elem_ );
 	}
 
 	template <typename Y>
 	explicit lf_shared_ptr( Y* p )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, std::default_delete<Y>, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p, std::default_delete<Y>() ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( p )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Y, typename Deleter>
 	lf_shared_ptr( Y* p, Deleter deleter )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p, deleter ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( p )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Y, typename Deleter, typename Alloc>
 	lf_shared_ptr( Y* p, Deleter deleter, Alloc alloc )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, Alloc>::create_my_class_carrier( alloc, p, deleter ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( p )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	lf_shared_ptr( std::nullptr_t p )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, std::default_delete<T>, std::allocator<T>>::create_my_class_carrier( std::allocator<T>(), nullptr, std::default_delete<T>() ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( nullptr )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Deleter>
 	lf_shared_ptr( std::nullptr_t p, Deleter deleter )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, std::allocator<T>>::create_my_class_carrier( std::allocator<T>(), nullptr, deleter ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( nullptr )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Deleter, typename Alloc>
 	lf_shared_ptr( std::nullptr_t p, Deleter deleter, Alloc alloc )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>::create_my_class_carrier( alloc, nullptr, deleter ) )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( nullptr )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <class Y>
 	lf_shared_ptr( const lf_shared_ptr<Y>& r, element_type* p ) noexcept
 	  : p_carrier_( r.p_carrier_ )
-	  , carrier_rc_guard_( r.carrier_rc_guard_ )
-	  , value_rc_guard_( r.value_rc_guard_ )
 	  , p_elem_( p )
 	{
+		if ( p_carrier_ == nullptr ) {
+			return;   // nothing to do
+		}
+
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <class Y>
 	lf_shared_ptr( lf_shared_ptr<Y>&& r, element_type* p ) noexcept
 	  : p_carrier_( r.p_carrier_ )
-	  , carrier_rc_guard_( std::move( r.carrier_rc_guard_ ) )
-	  , value_rc_guard_( std::move( r.value_rc_guard_ ) )
 	  , p_elem_( p )
 	{
 		r.p_carrier_ = nullptr;
@@ -479,17 +479,19 @@ public:
 	template <class Y, typename std::enable_if<std::is_convertible<Y*, T*>::value>::type* = nullptr>
 	lf_shared_ptr( const lf_shared_ptr<Y>& r ) noexcept
 	  : p_carrier_( r.p_carrier_ )
-	  , carrier_rc_guard_( r.carrier_rc_guard_ )
-	  , value_rc_guard_( r.value_rc_guard_ )
 	  , p_elem_( r.p_elem_ )
 	{
+		if ( p_carrier_ == nullptr ) {
+			return;   // nothing to do
+		}
+
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <class Y, typename std::enable_if<std::is_convertible<Y*, T*>::value>::type* = nullptr>
 	lf_shared_ptr( lf_shared_ptr<Y>&& r ) noexcept
 	  : p_carrier_( r.p_carrier_ )
-	  , carrier_rc_guard_( std::move( r.carrier_rc_guard_ ) )
-	  , value_rc_guard_( std::move( r.value_rc_guard_ ) )
 	  , p_elem_( r.p_elem_ )
 	{
 		r.p_carrier_ = nullptr;
@@ -499,14 +501,12 @@ public:
 	template <class Y, typename Deleter, typename std::enable_if<std::is_convertible<typename std::unique_ptr<Y, Deleter>::pointer, T*>::value>::type* = nullptr>
 	lf_shared_ptr( std::unique_ptr<Y, Deleter>&& r ) noexcept
 	  : p_carrier_( nullptr )
-	  , carrier_rc_guard_()
-	  , value_rc_guard_()
 	  , p_elem_( nullptr )
 	{
-		p_elem_           = r.get();
-		p_carrier_        = itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p_elem_, r.get_deleter() );
-		carrier_rc_guard_ = rc::sticky_counter_guard( p_carrier_->carrier_rc_ );
-		value_rc_guard_   = rc::sticky_counter_guard( p_carrier_->value_rc_ );
+		p_elem_    = r.get();
+		p_carrier_ = itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p_elem_, r.get_deleter() );
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 		r.release();   // 構築が成功したので、unique_ptrからポインタを解放する。例外安全のために、最後に行う。
 	}
 
@@ -564,10 +564,10 @@ private:
 
 	lf_shared_ptr( inner_constructor_tag, itl::lf_shared_value_carrier_base* p_carrier_arg, T* p_elem_arg )
 	  : p_carrier_( p_carrier_arg )
-	  , carrier_rc_guard_( p_carrier_->carrier_rc_ )
-	  , value_rc_guard_( p_carrier_->value_rc_ )
 	  , p_elem_( p_elem_arg )
 	{
+		p_carrier_->carrier_rc_.increment_if_not_zero();
+		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename U, typename... Args>
@@ -575,10 +575,8 @@ private:
 	template <typename U, typename Alloc, typename... Args>
 	friend lf_shared_ptr<U> allocate_lf_shared( Alloc alloc, Args&&... args );
 
-	itl::lf_shared_value_carrier_base*           p_carrier_;          //!< pointer to the value carrier
-	rc::sticky_counter_guard<rc::sticky_counter> carrier_rc_guard_;   //!< reference counter guard to manage the lifetime of the carrier
-	rc::sticky_counter_guard<rc::sticky_counter> value_rc_guard_;     //!< reference counter guard to manage the lifetime of the element
-	element_type*                                p_elem_;             //!< pointer to the heap element that holds the value
+	itl::lf_shared_value_carrier_base* p_carrier_;   //!< pointer to the value carrier
+	element_type*                      p_elem_;      //!< pointer to the heap element that holds the value
 };
 
 template <typename T, typename... Args>
