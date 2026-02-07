@@ -47,6 +47,19 @@ struct basic_sticky_counter {
 	static_assert( std::is_unsigned<T>::value, "T should be unsigned" );
 	using rc_type = T;
 
+	// カウンタ0で初期化するコンストラクタ
+	basic_sticky_counter( void ) noexcept
+	  : counter_( recycled_zero_ )
+	{
+	}
+
+	// カウンタ１で初期化するコンストラクタ
+	// 引数はコンストラクタを区別するためのダミー型
+	explicit basic_sticky_counter( rc_type ) noexcept
+	  : counter_( 1 )
+	{
+	}
+
 	/**
 	 * @brief increment counter if it is not zero
 	 *
@@ -152,7 +165,7 @@ struct basic_sticky_counter {
 		rc_type val = counter_.load( std::memory_order_acquire );
 		if ( val == 0 ) {
 			// 1->0への変更処理中と思われる状況でゼロが読み出せてしまったので、ゼロになったことを確定する必要がある。
-			// そのため、ゼロフラグを立てられることを再検査する。
+			// そのため、ゼロフラグを立てることが出来ることを再検査する。
 			// また、1->0への変更に成功したスレッドの再判定ができるように、helped_フラグも立てておく。
 			// 補足： recycle直後の状況では、val == recycled_zero_であるため、val != 0となり、ここには到達しない。
 			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_, std::memory_order_acq_rel ) ) {
@@ -228,7 +241,7 @@ private:
 		return ( pre_value & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) >= max();
 	}
 
-	mutable std::atomic<rc_type> counter_ { recycled_zero_ };   //!< reference counter. mutable attribute is for read() member function
+	mutable std::atomic<rc_type> counter_;   //!< reference counter. mutable attribute is for read() member function
 };
 
 using sticky_counter = basic_sticky_counter<uint64_t>;

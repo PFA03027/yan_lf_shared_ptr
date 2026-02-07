@@ -182,8 +182,8 @@ struct lf_shared_value_carrier_base {
 	virtual void destruct_value( void ) noexcept = 0;
 	virtual void discard_self( void ) noexcept   = 0;
 
-	rc::sticky_counter carrier_rc_;   //!< carrier自身の寿命管理用reference counter
-	rc::sticky_counter value_rc_;     //!< v_の有効性管理用reference counter
+	rc::sticky_counter carrier_rc_ { 1 };   //!< carrier自身の寿命管理用reference counter
+	rc::sticky_counter value_rc_ { 1 };     //!< v_の有効性管理用reference counter
 };
 
 template <typename T, typename Alloc>
@@ -344,7 +344,7 @@ public:
 		if ( p_carrier_->value_rc_.decrement_then_is_zero() ) {   // decrement the reference count
 			p_carrier_->destruct_value();
 		}
-		if ( p_carrier_->carrier_rc_.decrement_then_is_zero() ) {
+		if ( p_carrier_->carrier_rc_.decrement_then_is_zero() ) {   // decrement the reference count
 			p_carrier_->discard_self();
 		}
 	}
@@ -406,8 +406,6 @@ public:
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, std::default_delete<Y>, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p, std::default_delete<Y>() ) )
 	  , p_elem_( p )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Y, typename Deleter>
@@ -415,8 +413,6 @@ public:
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p, deleter ) )
 	  , p_elem_( p )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Y, typename Deleter, typename Alloc>
@@ -424,16 +420,12 @@ public:
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, Alloc>::create_my_class_carrier( alloc, p, deleter ) )
 	  , p_elem_( p )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	lf_shared_ptr( std::nullptr_t p )
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, std::default_delete<T>, std::allocator<T>>::create_my_class_carrier( std::allocator<T>(), nullptr, std::default_delete<T>() ) )
 	  , p_elem_( nullptr )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Deleter>
@@ -441,8 +433,6 @@ public:
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, std::allocator<T>>::create_my_class_carrier( std::allocator<T>(), nullptr, deleter ) )
 	  , p_elem_( nullptr )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename Deleter, typename Alloc>
@@ -450,8 +440,6 @@ public:
 	  : p_carrier_( itl::lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc>::create_my_class_carrier( alloc, nullptr, deleter ) )
 	  , p_elem_( nullptr )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <class Y>
@@ -505,8 +493,6 @@ public:
 	{
 		p_elem_    = r.get();
 		p_carrier_ = itl::lf_shared_value_carrier_impl_pointer_with_deleter<Y, Deleter, std::allocator<Y>>::create_my_class_carrier( std::allocator<Y>(), p_elem_, r.get_deleter() );
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 		r.release();   // 構築が成功したので、unique_ptrからポインタを解放する。例外安全のために、最後に行う。
 	}
 
@@ -566,8 +552,6 @@ private:
 	  : p_carrier_( p_carrier_arg )
 	  , p_elem_( p_elem_arg )
 	{
-		p_carrier_->carrier_rc_.increment_if_not_zero();
-		p_carrier_->value_rc_.increment_if_not_zero();
 	}
 
 	template <typename U, typename... Args>
