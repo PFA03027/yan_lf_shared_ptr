@@ -55,7 +55,7 @@ struct basic_sticky_counter {
 	 */
 	bool increment_if_not_zero( void ) noexcept
 	{
-		rc_type pre_value = counter_.fetch_add( 1 /* , std::memory_order_acq_rel */ );
+		rc_type pre_value = counter_.fetch_add( 1, std::memory_order_acq_rel );
 #ifdef ENABLE_STICKY_COUNTER_OVERFLOW_CHECK
 		if ( is_overflow( pre_value ) ) {
 			exit( 1 );
@@ -75,7 +75,7 @@ struct basic_sticky_counter {
 #ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
 				rc_type pre_value2 =
 #endif
-					counter_.fetch_and( ~recycled_zero_ /* , std::memory_order_acq_rel */ );
+					counter_.fetch_and( ~recycled_zero_, std::memory_order_acq_rel );
 #ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
 				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
 					exit( 1 );   // ここに来ることはない。デバッグ目的として、論理エラーを検出するためexit(1)を呼び出す。
@@ -88,7 +88,7 @@ struct basic_sticky_counter {
 			// 現実的には、この処理を行わなくても、オーバーフローすることはないが、論理的には起きうる。
 			// 例えば、increment_if_not_zero() == falseとなっても、これを無視して、increment_if_not_zero()が呼び出され続けるような使い方をされた場合にオーバーフローが発生する。
 			// オーバーフローが発生すると、sticky counterとしては回復不能状態となるので、差し戻す処理を用意する。
-			counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ );
+			counter_.fetch_sub( 1, std::memory_order_acq_rel );
 		}
 		return ans;
 	}
@@ -149,13 +149,13 @@ struct basic_sticky_counter {
 	 */
 	rc_type read( void ) const noexcept
 	{
-		rc_type val = counter_.load( /* std::memory_order_acquire */ );
+		rc_type val = counter_.load( std::memory_order_acquire );
 		if ( val == 0 ) {
 			// 1->0への変更処理中と思われる状況でゼロが読み出せてしまったので、ゼロになったことを確定する必要がある。
 			// そのため、ゼロフラグを立てられることを再検査する。
 			// また、1->0への変更に成功したスレッドの再判定ができるように、helped_フラグも立てておく。
 			// 補足： recycle直後の状況では、val == recycled_zero_であるため、val != 0となり、ここには到達しない。
-			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_ /* , std::memory_order_acq_rel */ ) ) {
+			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_, std::memory_order_acq_rel ) ) {
 				return 0;
 			}
 		}
@@ -170,7 +170,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_sticky_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( /* std::memory_order_acquire */ );
+		rc_type val = counter_.load( std::memory_order_acquire );
 		return ( val & is_zero_ ) != 0;
 	}
 
@@ -182,7 +182,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_recycled_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( /* std::memory_order_acquire */ );
+		rc_type val = counter_.load( std::memory_order_acquire );
 		return val == recycled_zero_;
 	}
 
@@ -194,7 +194,7 @@ struct basic_sticky_counter {
 	 */
 	bool is_sticky_or_recycled_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( /* std::memory_order_acquire */ );
+		rc_type val = counter_.load( std::memory_order_acquire );
 		return ( val & ( is_zero_ | recycled_zero_ ) ) != 0;
 	}
 
@@ -210,7 +210,7 @@ struct basic_sticky_counter {
 	 */
 	void recycle( void ) noexcept
 	{
-		counter_.store( recycled_zero_ );
+		counter_.store( recycled_zero_, std::memory_order_release );
 	}
 
 	static constexpr rc_type max( void )
