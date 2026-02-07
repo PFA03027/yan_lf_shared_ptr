@@ -118,16 +118,16 @@ struct basic_sticky_counter {
 
 		// ここに来る時点でrecycled_zero_のフラグは落ちているので、
 		// 1 -> 0の変化を検出するのに、recycled_zero_のフラグの状態考慮は不要で、1との比較で十分となっている。
-		if ( counter_.fetch_sub( 1 /* , std::memory_order_acq_rel */ ) == 1 ) {
+		if ( counter_.fetch_sub( 1, std::memory_order_acq_rel ) == 1 ) {
 			rc_type e = 0;
-			if ( counter_.compare_exchange_strong( e, is_zero_ /* , std::memory_order_acq_rel */ ) ) {
+			if ( counter_.compare_exchange_strong( e, is_zero_, std::memory_order_acq_rel ) ) {
 				// fetch_sub(1)で、counter_がゼロに到達したあと、ゼロ確定に成功した。よって、trueを返す。
 				return true;
 			}
 
 			// fetch_sub(1)で、counter_がゼロに到達したあと、別スレッドがゼロ確定を行ったか、incrementされた場合にここに到達する。
 			if ( ( e & helped_ ) != 0 ) {
-				if ( ( counter_.exchange( is_zero_ /* , std::memory_order_release */ ) & helped_ ) != 0 ) {
+				if ( ( counter_.exchange( is_zero_, std::memory_order_acq_rel ) & helped_ ) != 0 ) {
 					// this thread get helped flag. this thread takes credit that decrement operation reached to zero.
 					return true;
 				} else {
