@@ -17,10 +17,20 @@ add_custom_target(build-test)
 set(EXEC_TARGET test_typeT_lf_heap)
 file(GLOB SOURCES *.cpp )
 
-add_executable(${EXEC_TARGET} EXCLUDE_FROM_ALL ${SOURCES})
+add_executable(${EXEC_TARGET} EXCLUDE_FROM_ALL)
+target_sources(${EXEC_TARGET} PRIVATE ${SOURCES})
 target_compile_features(${EXEC_TARGET} PRIVATE cxx_std_20) #  -std=c++20
-target_include_directories( ${EXEC_TARGET}  PRIVATE ../inc )
 target_compile_options(${EXEC_TARGET} PUBLIC  -Wall -Wconversion -Wsign-conversion -Werror)
-target_link_libraries(${EXEC_TARGET} gtest gtest_main )
+target_link_libraries(${EXEC_TARGET} yan::lf_shared_ptr GTest::gtest GTest::gtest_main )
 add_dependencies(build-test ${EXEC_TARGET})
 add_test(NAME ${EXEC_TARGET} COMMAND $<TARGET_FILE:${EXEC_TARGET}>)
+
+# compile option
+# ENABLE_STICKY_COUNTER_OVERFLOW_CHECK
+target_compile_definitions(${EXEC_TARGET} PUBLIC ENABLE_STICKY_COUNTER_OVERFLOW_CHECK)
+#
+# ENABLE_STICKY_COUNTER_LOGIC_CHECK
+target_compile_definitions(${EXEC_TARGET} PUBLIC ENABLE_STICKY_COUNTER_LOGIC_CHECK)
+#
+# TEST_ENABLE_LOGICCHECKER
+target_compile_definitions(${EXEC_TARGET} PUBLIC TEST_ENABLE_LOGICCHECKER)

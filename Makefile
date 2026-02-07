@@ -62,6 +62,10 @@ clean:
 clean-all:
 	-rm -fr ${BUILD_DIR}
 
+# This is inatall command example
+install: all
+	DESTDIR=/tmp/install-test cmake --install ${BUILD_DIR} --prefix /opt/xxx
+
 coverage: clean
 	set -e; \
 	make BUILD_CONFIG=codecoverage BUILD_TYPE=Debug test;  \

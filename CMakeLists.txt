@@ -16,5 +16,6 @@ include(${BUILD_CONFIG}.cmake)
 # To generate the targets "test" to top of Makefile, we need to declare below in top CMakeLists.txt
 enable_testing()
 
+add_subdirectory(yan_lf_shared_ptr)
 add_subdirectory(test EXCLUDE_FROM_ALL)
 # add_subdirectory(sample)
