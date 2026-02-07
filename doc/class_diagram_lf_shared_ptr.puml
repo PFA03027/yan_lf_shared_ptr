@@ -11,9 +11,6 @@ class basic_sticky_counter<unsigned integral> {
   + bool decrement_then_is_zero()
   + rc_type read()
   + bool is_sticky_zero()
-  + bool is_recycled_zero()
-  + bool is_sticky_or_recycled_zero()
-  + void recycle()
   + {static} rc_type max()
 }
 

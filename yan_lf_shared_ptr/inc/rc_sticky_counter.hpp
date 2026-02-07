@@ -49,7 +49,7 @@ struct basic_sticky_counter {
 
 	// カウンタ0で初期化するコンストラクタ
 	basic_sticky_counter( void ) noexcept
-	  : counter_( recycled_zero_ )
+	  : counter_( 0 )
 	{
 	}
 
@@ -83,18 +83,6 @@ struct basic_sticky_counter {
 		bool ans = ( ( pre_value & is_zero_ ) == 0 );
 		if ( ans ) {
 			// ゼロフラグが立っていないので、incrementに成功
-			if ( pre_value == recycled_zero_ ) {
-				// recycled_zero_ -> recycled_zero_ + 1への変化を起こしたスレッドなので、recycled_zero_フラグを落とす。
-#ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
-				rc_type pre_value2 =
-#endif
-					counter_.fetch_and( ~recycled_zero_, std::memory_order_acq_rel );
-#ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
-				if ( ( pre_value2 & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) == 0 ) {
-					exit( 1 );   // ここに来ることはない。デバッグ目的として、論理エラーを検出するためexit(1)を呼び出す。
-				}
-#endif
-			}
 		} else {
 			// ゼロフラグが立っていたので、incrementには失敗。
 			// ただ、加算自体は実行されてしまっていて、これを放置すると、オーバーフローが発生するかもしれないので、加算を差し戻す。
@@ -122,15 +110,13 @@ struct basic_sticky_counter {
 	{
 #ifdef ENABLE_STICKY_COUNTER_LOGIC_CHECK
 		rc_type tmp = counter_.load( /* std::memory_order_acquire */ );
-		if ( ( tmp & recycled_zero_ ) != 0 ) {
+		if ( tmp == 0 ) {
 			// 呼び出し側が、すくなくともincrement_if_not_zero()を一度も呼び出さずに、decrement_then_is_zero()を呼び出した状況。
 			// pre conditionの違反なので、exit(1)を呼ぶ。
 			exit( 1 );
 		}
 #endif
 
-		// ここに来る時点でrecycled_zero_のフラグは落ちているので、
-		// 1 -> 0の変化を検出するのに、recycled_zero_のフラグの状態考慮は不要で、1との比較で十分となっている。
 		if ( counter_.fetch_sub( 1, std::memory_order_acq_rel ) == 1 ) {
 			rc_type e = 0;
 			if ( counter_.compare_exchange_strong( e, is_zero_, std::memory_order_acq_rel ) ) {
@@ -172,7 +158,7 @@ struct basic_sticky_counter {
 				return 0;
 			}
 		}
-		return ( val & is_zero_ ) ? 0 : ( val & ( ~recycled_zero_ ) );
+		return ( ( val & is_zero_ ) != 0 ) ? 0 : val;
 	}
 
 	/**
@@ -187,58 +173,18 @@ struct basic_sticky_counter {
 		return ( val & is_zero_ ) != 0;
 	}
 
-	/**
-	 * @brief check if counter value is before recycled or after recycled
-	 *
-	 * @retval true counter is called recycle()
-	 * @retval false counter is not called recycle() yet
-	 */
-	bool is_recycled_zero( void ) const noexcept
-	{
-		rc_type val = counter_.load( std::memory_order_acquire );
-		return val == recycled_zero_;
-	}
-
-	/**
-	 * @brief check if counter value is reached zero or after called recycle()
-	 *
-	 * @retval true counter is reached zero or after called recycle()
-	 * @retval false counter is not reached zero and before called recycle()
-	 */
-	bool is_sticky_or_recycled_zero( void ) const noexcept
-	{
-		rc_type val = counter_.load( std::memory_order_acquire );
-		return ( val & ( is_zero_ | recycled_zero_ ) ) != 0;
-	}
-
-	/**
-	 * @brief 再利用するために、カウンタの状態を初期化しなおす。
-	 *
-	 * @pre
-	 * このAPIを利用できるのは、decrement_then_is_zero()がtrueで帰ってきたスレッドであること。
-	 * そうでない場合、何らかの方法で、このカウンターがすでに参照されていないことを外部ロジックで保証されていること。
-	 *
-	 * @warning
-	 * 事前条件が守られない場合、stickyではなくなってしまい、異常なリファレンスカウンタとして動作する。結果として、メモリ破壊等の異常状態に至る。
-	 */
-	void recycle( void ) noexcept
-	{
-		counter_.store( recycled_zero_, std::memory_order_release );
-	}
-
 	static constexpr rc_type max( void )
 	{
 		return std::numeric_limits<rc_type>::max() >> 3;
 	}
 
 private:
-	static constexpr rc_type is_zero_       = ~( std::numeric_limits<rc_type>::max() >> 1 );                            //<! 最上位ビットのみが立った値
-	static constexpr rc_type helped_        = ~( ( std::numeric_limits<rc_type>::max() >> 2 ) | is_zero_ );             //<! 最上位から2番目のみのビットが立った値
-	static constexpr rc_type recycled_zero_ = ~( ( std::numeric_limits<rc_type>::max() >> 3 ) | is_zero_ | helped_ );   //<! 最上位から3番目のみのビットが立った値
+	static constexpr rc_type is_zero_ = ~( std::numeric_limits<rc_type>::max() >> 1 );                  //<! 最上位ビットのみが立った値
+	static constexpr rc_type helped_  = ~( ( std::numeric_limits<rc_type>::max() >> 2 ) | is_zero_ );   //<! 最上位から2番目のみのビットが立った値
 
 	static constexpr bool is_overflow( rc_type pre_value )
 	{
-		return ( pre_value & ( ~( is_zero_ | helped_ | recycled_zero_ ) ) ) >= max();
+		return ( pre_value & ( ~( is_zero_ | helped_ ) ) ) >= max();
 	}
 
 	mutable std::atomic<rc_type> counter_;   //!< reference counter. mutable attribute is for read() member function
