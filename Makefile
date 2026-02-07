@@ -77,7 +77,7 @@ profile: clean
 	set -e; \
 	make BUILD_CONFIG=gprof BUILD_TYPE=Release build-test;  \
 	cd ${BUILD_DIR}; \
-	./test/test_typeT_lf_heap; \
+	./test/test_typeT_lf_heap --gtest_filter=YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithRcSharedPtr; \
 	gprof ./test/test_typeT_lf_heap ./gmon.out > ./prof.out.txt
 
 sanitizer:
@@ -100,4 +100,6 @@ tidy: configure-cmake
 
 .PHONY: test build-test configure-cmake clean-all coverage profile sanitizer tidy tidy-fix
 
+perf: build-test
+	${BUILD_DIR}/test/test_typeT_lf_heap --gtest_filter=YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithRcSharedPtr:YanLFSharedPtrWithTypedPoolHeapHighLoad.CanComparePerformanceWithStdSharedPtr
 
