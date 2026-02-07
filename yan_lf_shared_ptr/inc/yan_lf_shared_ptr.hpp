@@ -52,11 +52,22 @@ public:
 
 	constexpr lf_shared_ptr( void )
 	  : p_elem_( nullptr )
-	  , rc_guard_() {}
+	{
+	}
 
 	lf_shared_ptr( const lf_shared_ptr& other )
 	  : p_elem_( other.p_elem_ )
-	  , rc_guard_( other.rc_guard_ ) {}
+	{
+		if ( p_elem_ != nullptr ) {
+			bool ret = p_elem_->ref().rc_.increment_if_not_zero();
+			if ( !ret ) {
+#ifdef TEST_ENABLE_LOGICCHECKER
+				throw std::logic_error( "lf_shared_ptr: failed to acquire reference count." );
+#else
+#endif
+			}
+		}
+	}
 
 	lf_shared_ptr& operator=( const lf_shared_ptr& other )
 	{
@@ -70,7 +81,6 @@ public:
 
 	lf_shared_ptr( lf_shared_ptr&& other ) noexcept
 	  : p_elem_( other.p_elem_ )
-	  , rc_guard_( std::move( other.rc_guard_ ) )
 	{
 		other.p_elem_ = nullptr;   // reset other pointer to avoid double free
 	}
@@ -88,7 +98,6 @@ public:
 	void swap( lf_shared_ptr& other ) noexcept
 	{
 		std::swap( p_elem_, other.p_elem_ );
-		rc_guard_.swap( other.rc_guard_ );
 	}
 
 	T* get() noexcept
@@ -131,7 +140,7 @@ public:
 		if ( p_elem_ == nullptr ) {
 			return;   // nothing to do
 		}
-		if ( rc_guard_.decrement_then_is_zero() ) {   // decrement the reference count
+		if ( p_elem_->ref().rc_.decrement_then_is_zero() ) {   // decrement the reference count
 			p_elem_->destruct_value();
 			heap_type::retire( p_elem_ );
 		}
@@ -145,20 +154,20 @@ private:
 
 	lf_shared_ptr( element_type* p_elem_arg )
 	  : p_elem_( p_elem_arg )
-	  , rc_guard_( p_elem_->ref().rc_ )   // acquire reference count
 	{
+		bool ret = p_elem_->ref().rc_.increment_if_not_zero();
+		if ( !ret ) {
 #ifdef TEST_ENABLE_LOGICCHECKER
-		if ( !rc_guard_.owns_count() ) {
 			throw std::logic_error( "lf_shared_ptr: failed to acquire reference count." );
-		}
+#else
 #endif
+		}
 	}
 
 	template <typename U, typename... Args>
 	friend lf_shared_ptr<U> make_limited_lf_shared_ptr( Args&&... args );
 
-	element_type*                                p_elem_;     //!< pointer to the heap element that holds the value
-	rc::sticky_counter_guard<rc::sticky_counter> rc_guard_;   //!< reference counter guard to manage the lifetime of the element
+	element_type* p_elem_;   //!< pointer to the heap element that holds the value
 };
 
 template <typename T, typename... Args>
