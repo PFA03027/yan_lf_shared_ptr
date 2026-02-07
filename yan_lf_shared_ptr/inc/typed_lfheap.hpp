@@ -399,19 +399,25 @@ void typed_pool_heap<T>::debug_destruction_and_regeneration( void )
 	}
 }
 
+}   // namespace lfheap
+
 // ========================================================================
+
+namespace lfheap2 {
+
+constexpr size_t ELEMNUM = 10000;
 
 class typed_pool_bad_alloc : public std::bad_alloc {
 public:
 	const char* what( void ) const noexcept override
 	{
 		// 内部状態を調べて、より詳細なエラーメッセージを返すことができるようにする予定。
-		return "typed_pool_heap2: memory allocation failed";
+		return "typed_pool_heap: memory allocation failed";
 	}
 };
 
 template <typename T>
-struct heap_element2 {
+struct heap_element {
 	using value_type = T;
 
 	union {
@@ -419,21 +425,21 @@ struct heap_element2 {
 		uint8_t    dummy_;
 	};
 
-	~heap_element2()
+	~heap_element()
 	{
 	}
 
-	constexpr heap_element2( void )
+	constexpr heap_element( void )
 	  : dummy_() {}
 };
 
 template <typename T>
-struct heap_element_mgrinfo2 {
-	std::atomic<size_t>                 rc_;                   //!< heap_element_mgrinfo2を参照中を示すreference counter
-	std::atomic<heap_element_mgrinfo2*> ap_free_stack_next_;   //!< freeリスト用に使われるnextポインタ
-	heap_element_mgrinfo2*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
+struct heap_element_mgrinfo {
+	std::atomic<size_t>                rc_;                   //!< heap_element_mgrinfo2を参照中を示すreference counter
+	std::atomic<heap_element_mgrinfo*> ap_free_stack_next_;   //!< freeリスト用に使われるnextポインタ
+	heap_element_mgrinfo*              p_retire_keep_next_;   //!< retire内で一時的に保持するリスト用のnextポインタ
 
-	constexpr heap_element_mgrinfo2( void )
+	constexpr heap_element_mgrinfo( void )
 	  : rc_( 0 )
 	  , ap_free_stack_next_( nullptr )
 	  , p_retire_keep_next_( nullptr )
@@ -442,7 +448,7 @@ struct heap_element_mgrinfo2 {
 };
 
 template <typename T>
-struct typed_pool_heap2 {
+struct typed_pool_heap {
 	// Allocator要件対応用。状態を持たないので、propagate系の定義は不要=std::false_type相当。
 	using value_type                             = T;
 	using propagate_on_container_move_assignment = std::true_type;
@@ -450,20 +456,20 @@ struct typed_pool_heap2 {
 	using difference_type                        = ptrdiff_t;
 
 	// 機能実装用
-	using element_type          = heap_element2<T>;
-	using mgr_info_type         = heap_element_mgrinfo2<T>;
+	using element_type          = heap_element<T>;
+	using mgr_info_type         = heap_element_mgrinfo<T>;
 	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
-	~typed_pool_heap2()                                  = default;
-	typed_pool_heap2( void ) noexcept                    = default;
-	typed_pool_heap2( const typed_pool_heap2& ) noexcept = default;
-	// typed_pool_heap2( typed_pool_heap2&& ) noexcept        = default;
-	typed_pool_heap2& operator=( const typed_pool_heap2& ) = default;
-	// typed_pool_heap2& operator=( typed_pool_heap2&& )      = default;
+	~typed_pool_heap()                                 = default;
+	typed_pool_heap( void ) noexcept                   = default;
+	typed_pool_heap( const typed_pool_heap& ) noexcept = default;
+	// typed_pool_heap( typed_pool_heap&& ) noexcept        = default;
+	typed_pool_heap& operator=( const typed_pool_heap& ) = default;
+	// typed_pool_heap& operator=( typed_pool_heap&& )      = default;
 
 	template <class U>
-	typed_pool_heap2( const typed_pool_heap2<U>& ) noexcept
+	typed_pool_heap( const typed_pool_heap<U>& ) noexcept
 	{
 	}
 
@@ -811,27 +817,27 @@ private:
 };
 
 template <typename T>
-constinit std::array<typename typed_pool_heap2<T>::mgr_info_type, typed_pool_heap2<T>::NUM> typed_pool_heap2<T>::array_mgr_info_;   //!< reference counter for each element in array_heap_
+constinit std::array<typename typed_pool_heap<T>::mgr_info_type, typed_pool_heap<T>::NUM> typed_pool_heap<T>::array_mgr_info_;   //!< reference counter for each element in array_heap_
 template <typename T>
-constinit std::array<typename typed_pool_heap2<T>::element_type, typed_pool_heap2<T>::NUM> typed_pool_heap2<T>::array_heap_;   //!< array_heap_ for each element
+constinit std::array<typename typed_pool_heap<T>::element_type, typed_pool_heap<T>::NUM> typed_pool_heap<T>::array_heap_;   //!< array_heap_ for each element
 template <typename T>
-constinit std::atomic<typename typed_pool_heap2<T>::index_t> typed_pool_heap2<T>::watermark_of_array_;   //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
+constinit std::atomic<typename typed_pool_heap<T>::index_t> typed_pool_heap<T>::watermark_of_array_;   //<! watermark of array_heap_ for each element 初期化時にリスト構築を不要にする役割も担う。
 template <typename T>
-constinit std::atomic<typename typed_pool_heap2<T>::mgr_info_type*> typed_pool_heap2<T>::ap_free_mgrinfo_head_;   //!< free list head pointer
+constinit std::atomic<typename typed_pool_heap<T>::mgr_info_type*> typed_pool_heap<T>::ap_free_mgrinfo_head_;   //!< free list head pointer
 template <typename T>
-constinit typed_pool_heap2<T>::mutex_retired_fifo_list typed_pool_heap2<T>::primary_retired_mgrinfo_list_;   //!< primary retired mgr_info_type elements
+constinit typed_pool_heap<T>::mutex_retired_fifo_list typed_pool_heap<T>::primary_retired_mgrinfo_list_;   //!< primary retired mgr_info_type elements
 template <typename T>
-constinit thread_local typed_pool_heap2<T>::retired_fifo_list typed_pool_heap2<T>::retired_mgrinfo_list_;   //!< thread-local variable to hold retired mgr_info_type elements
+constinit thread_local typed_pool_heap<T>::retired_fifo_list typed_pool_heap<T>::retired_mgrinfo_list_;   //!< thread-local variable to hold retired mgr_info_type elements
 template <typename T>
-constinit thread_local typed_pool_heap2<T>::thread_local_retired_fifo_list_cleaner typed_pool_heap2<T>::tl_retired_fifo_list_cleaner_;   //!< thread-local cleaner for retired elements list
+constinit thread_local typed_pool_heap<T>::thread_local_retired_fifo_list_cleaner typed_pool_heap<T>::tl_retired_fifo_list_cleaner_;   //!< thread-local cleaner for retired elements list
 
 template <typename T>
-void typed_pool_heap2<T>::debug_destruction_and_regeneration( void )
+void typed_pool_heap<T>::debug_destruction_and_regeneration( void )
 {
 	array_mgr_info_.~array();
-	new ( &array_mgr_info_ ) std::array<typename typed_pool_heap2<T>::mgr_info_type, typed_pool_heap2<T>::NUM>();
+	new ( &array_mgr_info_ ) std::array<typename typed_pool_heap<T>::mgr_info_type, typed_pool_heap<T>::NUM>();
 	array_heap_.~array();
-	new ( &array_heap_ ) std::array<typename typed_pool_heap2<T>::element_type, typed_pool_heap2<T>::NUM>();
+	new ( &array_heap_ ) std::array<typename typed_pool_heap<T>::element_type, typed_pool_heap<T>::NUM>();
 	watermark_of_array_.store( 0 /* , std::memory_order_release */ );
 	ap_free_mgrinfo_head_.store( nullptr /* , std::memory_order_release */ );
 	primary_retired_mgrinfo_list_.clear();
@@ -839,14 +845,14 @@ void typed_pool_heap2<T>::debug_destruction_and_regeneration( void )
 }
 
 template <typename T>
-struct deleter_via_typed_pool_heap2 {
+struct deleter_via_typed_pool_heap {
 	void operator()( T* p ) noexcept
 	{
 		if ( p == nullptr ) {
 			return;
 		}
 
-		using allocator_type        = typed_pool_heap2<T>;
+		using allocator_type        = typed_pool_heap<T>;
 		using allocator_traits_type = std::allocator_traits<allocator_type>;
 
 		allocator_type tmp_alloc;
@@ -855,6 +861,6 @@ struct deleter_via_typed_pool_heap2 {
 	}
 };
 
-}   // namespace lfheap
+}   // namespace lfheap2
 
 #endif   // LF_TYPED_HEAP_HPP_

@@ -33,7 +33,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 {
 	// Arrange
 	std::atomic<bool> done { false };
-	using AllocType = lfheap::typed_pool_heap2<NonTrivialType>;
+	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
 	AllocType::debug_destruction_and_regeneration();
 	AllocType alloc;
 
@@ -153,7 +153,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 {
 	// Arrange
 	std::atomic<bool> done { false };
-	using AllocType = lfheap::typed_pool_heap2<uint32_t>;
+	using AllocType = lfheap2::typed_pool_heap<uint32_t>;
 	AllocType::debug_destruction_and_regeneration();
 	AllocType alloc;
 

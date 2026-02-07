@@ -19,7 +19,7 @@
 TEST( YanLFSharedPtrWithTypedPoolHeap, CanAllocateShared )
 {
 	// Arrange
-	using AllocType = lfheap::typed_pool_heap2<NonTrivialType>;
+	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
 	AllocType alloc;
 
 	// Act
@@ -33,9 +33,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeap, CanAllocateShared )
 TEST( YanLFSharedPtrWithTypedPoolHeap, CanConstruct )
 {
 	// Arrange
-	using AllocType = lfheap::typed_pool_heap2<NonTrivialType>;
+	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
 	AllocType alloc;
-	using DeleterType = lfheap::deleter_via_typed_pool_heap2<NonTrivialType>;
+	using DeleterType = lfheap2::deleter_via_typed_pool_heap<NonTrivialType>;
 	DeleterType deleter;
 
 	using allocator_traits_type = std::allocator_traits<AllocType>;
