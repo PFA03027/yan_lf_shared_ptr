@@ -3,7 +3,7 @@
 # 1. please prepare XXXX.cmake that includes build options
 # 2. provide file information of XXXX.cmake like below to CMakeLists.txt
 #    with -D option like below
-#        $ cmake -D BUILD_TARGET=XXXX
+#        $ cmake -D BUILD_CONFIG=XXXX
 #    or
 #        $ make BUILDTARGET=XXXX
 # 
@@ -41,7 +41,7 @@ JOBS=$(shell expr ${CPUS} + ${CPUS} / 2)
 
 CMAKE_CONFIGURE_OPTS  = -DCMAKE_EXPORT_COMPILE_COMMANDS=ON	# for clang-tidy
 CMAKE_CONFIGURE_OPTS += -DCMAKE_BUILD_TYPE=${BUILDTYPE}
-CMAKE_CONFIGURE_OPTS += -DBUILD_TARGET=${BUILDTARGET}
+CMAKE_CONFIGURE_OPTS += -DBUILD_CONFIG=${BUILDTARGET}
 CMAKE_CONFIGURE_OPTS += -DSANITIZER_TYPE=${SANITIZER_TYPE}
 CMAKE_CONFIGURE_OPTS += -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
 
