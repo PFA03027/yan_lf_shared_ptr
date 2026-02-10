@@ -28,6 +28,75 @@ namespace lfheap {
 constexpr size_t ELEMNUM = 10000;
 
 /**
+ * @brief counter guard for integral type atomic variable.
+ *
+ * @tparam IAV integral type atomic variable
+ */
+template <typename IAV>
+class counter_guard {
+public:
+	~counter_guard()
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_sub( 1 /* , std::memory_order_acq_rel */ );
+	}
+	constexpr counter_guard( void ) noexcept
+	  : p_counter_( nullptr )
+	{
+	}
+
+	counter_guard( const counter_guard& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
+	}
+
+	counter_guard( counter_guard&& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		src.p_counter_ = nullptr;   // reset source pointer to avoid double decrement
+	}
+
+	counter_guard& operator=( const counter_guard& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( src ).swap( *this );   // Use copy-and-swap idiom for exception safety
+		return *this;
+	}
+	counter_guard& operator=( counter_guard&& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( std::move( src ) ).swap( *this );   // Use move-and-swap idiom for exception safety
+		return *this;
+	}
+
+	explicit counter_guard( IAV& iav_ref ) noexcept
+	  : p_counter_( &iav_ref )
+	{
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
+	}
+
+	void swap( counter_guard& other ) noexcept
+	{
+		std::swap( p_counter_, other.p_counter_ );
+	}
+
+private:
+	IAV* p_counter_;   //!< pointer to integral type atomic variable
+};
+
+/**
  * @brief heap element for typed_pool_heap
  *
  * @tparam T value type
@@ -88,13 +157,13 @@ struct heap_element {
 template <typename T>
 struct typed_pool_heap {
 	using element_type          = heap_element<T>;
-	using counter_guard_t       = rc::counter_guard<std::atomic<size_t>>;
+	using counter_guard_t       = counter_guard<std::atomic<size_t>>;
 	static constexpr size_t NUM = ELEMNUM;
 
 	static counter_guard_t get_counter_guard( element_type* p_elem )
 	{
 		size_t idx = elem_pointer_to_index( p_elem );
-		return rc::counter_guard( array_rc_[idx] );
+		return counter_guard_t( array_rc_[idx] );
 	}
 
 	static element_type* allocate( void )
@@ -267,8 +336,8 @@ private:
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
-				size_t            idx = elem_pointer_to_index( p_ans );
-				rc::counter_guard tmp_rc_g( array_rc_[idx] );
+				size_t          idx = elem_pointer_to_index( p_ans );
+				counter_guard_t tmp_rc_g( array_rc_[idx] );
 				if ( ap_free_elem_head_.load() == p_ans ) {
 					// カウンタ確保後も、p_ansが有効だったので、リファレンスカウンタの獲得は有効。
 					my_rc_g.swap( tmp_rc_g );   // ループを抜けた後もp_ansを参照するため、リファレンスカウンタを保持しているガード変数をループの外の変数に移動してから、ループを抜ける
@@ -406,6 +475,76 @@ void typed_pool_heap<T>::debug_destruction_and_regeneration( void )
 namespace lfheap2 {
 
 namespace itl {
+
+/**
+ * @brief counter guard for integral type atomic variable.
+ *
+ * @tparam IAV integral type atomic variable
+ */
+template <typename IAV>
+class counter_guard {
+public:
+	~counter_guard()
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_sub( 1 /* , std::memory_order_acq_rel */ );
+	}
+	constexpr counter_guard( void ) noexcept
+	  : p_counter_( nullptr )
+	{
+	}
+
+	counter_guard( const counter_guard& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		if ( p_counter_ == nullptr ) {
+			return;   // nothing to do
+		}
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
+	}
+
+	counter_guard( counter_guard&& src ) noexcept
+	  : p_counter_( src.p_counter_ )
+	{
+		src.p_counter_ = nullptr;   // reset source pointer to avoid double decrement
+	}
+
+	counter_guard& operator=( const counter_guard& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( src ).swap( *this );   // Use copy-and-swap idiom for exception safety
+		return *this;
+	}
+	counter_guard& operator=( counter_guard&& src ) noexcept
+	{
+		if ( this == &src ) {
+			return *this;   // Handle self-assignment
+		}
+
+		counter_guard( std::move( src ) ).swap( *this );   // Use move-and-swap idiom for exception safety
+		return *this;
+	}
+
+	explicit counter_guard( IAV& iav_ref ) noexcept
+	  : p_counter_( &iav_ref )
+	{
+		p_counter_->fetch_add( 1 /* , std::memory_order_acq_rel */ );
+	}
+
+	void swap( counter_guard& other ) noexcept
+	{
+		std::swap( p_counter_, other.p_counter_ );
+	}
+
+private:
+	IAV* p_counter_;   //!< pointer to integral type atomic variable
+};
+
 template <typename T>
 struct heap_element {
 	using value_type = T;
@@ -503,7 +642,7 @@ private:
 	using index_t         = size_t;
 	using element_type    = itl::heap_element<T>;
 	using mgr_info_type   = itl::heap_element_mgrinfo;
-	using counter_guard_t = rc::counter_guard<std::atomic<size_t>>;
+	using counter_guard_t = itl::counter_guard<std::atomic<size_t>>;
 
 	static index_t value_pointer_to_index( value_type* p_value )
 	{
@@ -707,7 +846,7 @@ private:
 
 				// ここで、タスクスイッチして、p_ansがretireまで行ってしまう可能性がある。
 				// そのため、reference countを獲得する。
-				rc::counter_guard tmp_rc_g( p_ans->rc_ );
+				counter_guard_t tmp_rc_g( p_ans->rc_ );
 				if ( ap_free_mgrinfo_head_.load() == p_ans ) {
 					// カウンタ確保後も、p_ansが有効だったので、リファレンスカウンタの獲得は有効。
 					my_rc_g.swap( tmp_rc_g );   // ループを抜けた後もp_ansを参照するため、リファレンスカウンタを保持しているガード変数をループの外の変数に移動してから、ループを抜ける
