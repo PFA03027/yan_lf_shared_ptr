@@ -1,7 +1,7 @@
 /**
  * @file yan_lf_shared_ptr.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
- * @brief
+ * @brief wait-free shared pointer implementation based on sticky counter
  * @version 0.1
  * @date 2025-07-20
  *

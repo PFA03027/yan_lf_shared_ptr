@@ -1,14 +1,13 @@
 /**
  * @file rc_sticky_counter.hpp
  * @author Teruaki Ata (PFA03027@nifty.com)
- * @brief sticky counter that could be recycle
+ * @brief sticky counter
  * @version 0.1
  * @date 2025-07-19
  *
  * @copyright Copyright (c) 2025, Teruaki Ata (PFA03027@nifty.com)
  *
- * CppCon 2024で紹介されたwait-free sticky counterをもとに、再利用できる機能を追加したwait-free sticky counter
- * 再利用可能なように、制御ビットを一つ追加している。
+ * CppCon 2024で紹介されたwait-free sticky counterの再実装
  *
  * @note
  * This wait-free algorithm and implementation introduced in below CppCon 2024 by Daniel Anderson
@@ -41,7 +40,7 @@ namespace rc {
  * fetch_add()の実装がCAS loopで実現される(と思われる)ARM系の場合、厳密にはWait-freeとはならない。
  *
  */
-template <typename T>
+template <typename T, bool ApplyOptimizedMemoryOrder = false>
 struct basic_sticky_counter {
 	static_assert( std::atomic<T>::is_always_lock_free, "T should support atomic operation" );
 	static_assert( std::is_unsigned<T>::value, "T should be unsigned" );
@@ -55,7 +54,7 @@ struct basic_sticky_counter {
 	 */
 	bool increment_if_not_zero( void ) noexcept
 	{
-		rc_type pre_value = counter_.fetch_add( 1, std::memory_order_acq_rel );
+		rc_type pre_value = counter_.fetch_add( 1, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst );
 #ifdef ENABLE_STICKY_COUNTER_OVERFLOW_CHECK
 		if ( is_overflow( pre_value ) ) {
 			exit( 1 );
@@ -73,10 +72,13 @@ struct basic_sticky_counter {
 		} else {
 			// ゼロフラグが立っていたので、incrementには失敗。
 			// ただ、加算自体は実行されてしまっていて、これを放置すると、オーバーフローが発生するかもしれないので、加算を差し戻す。
-			// 現実的には、この処理を行わなくても、オーバーフローすることはないが、論理的には起きうる。
-			// 例えば、increment_if_not_zero() == falseとなっても、これを無視して、increment_if_not_zero()が呼び出され続けるような使い方をされた場合にオーバーフローが発生する。
-			// オーバーフローが発生すると、sticky counterとしては回復不能状態となるので、差し戻す処理を用意する。
-			counter_.fetch_sub( 1, std::memory_order_acq_rel );
+			// ただし、他スレッドで、recycle()が呼び出されていて、counter_が1にリサイクルされている可能性もあるため、単純にfetch_sub()を呼び出すのではなく、
+			// compare_exchange_strong()で、recycle()が呼び出されていないことを確認した上で、差し戻しを行う。
+			// recycle()が呼び出されていた場合、counter_は1になっているはずなので、差し戻しは不要であり、その場合、compare_exchange_strong()は失敗するので、
+			// comppare_exchange_strong()の成否にかかわらす、結果は意図通りとなる。
+			rc_type e = pre_value + 1;
+			counter_.compare_exchange_strong( e, is_zero_, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst );
+			// compare_exchange_strong()の戻り値は不要なので、無視する
 		}
 		return ans;
 	}
@@ -99,21 +101,21 @@ struct basic_sticky_counter {
 		rc_type tmp = counter_.load( /* std::memory_order_acquire */ );
 		if ( tmp == 0 ) {
 			// 呼び出し側が、すくなくともincrement_if_not_zero()を一度も呼び出さずに、decrement_then_is_zero()を呼び出した状況。
-			// pre conditionの違反なので、exit(1)を呼ぶ。
-			exit( 1 );
+			// pre conditionの違反なので、abort()を呼ぶ。
+			abort();
 		}
 #endif
 
-		if ( counter_.fetch_sub( 1, std::memory_order_acq_rel ) == 1 ) {
+		if ( counter_.fetch_sub( 1, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst ) == 1 ) {
 			rc_type e = 0;
-			if ( counter_.compare_exchange_strong( e, is_zero_, std::memory_order_acq_rel ) ) {
+			if ( counter_.compare_exchange_strong( e, is_zero_, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst ) ) {
 				// fetch_sub(1)で、counter_がゼロに到達したあと、ゼロ確定に成功した。よって、trueを返す。
 				return true;
 			}
 
 			// fetch_sub(1)で、counter_がゼロに到達したあと、別スレッドがゼロ確定を行ったか、incrementされた場合にここに到達する。
 			if ( ( e & helped_ ) != 0 ) {
-				if ( ( counter_.exchange( is_zero_, std::memory_order_acq_rel ) & helped_ ) != 0 ) {
+				if ( ( counter_.exchange( is_zero_, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst ) & helped_ ) != 0 ) {
 					// this thread get helped flag. this thread takes credit that decrement operation reached to zero.
 					return true;
 				} else {
@@ -135,13 +137,13 @@ struct basic_sticky_counter {
 	 */
 	rc_type read( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( ApplyOptimizedMemoryOrder ? std::memory_order_acquire : std::memory_order_seq_cst );
 		if ( val == 0 ) {
 			// 1->0への変更処理中と思われる状況でゼロが読み出せてしまったので、ゼロになったことを確定する必要がある。
 			// そのため、ゼロフラグを立てることが出来ることを再検査する。
 			// また、1->0への変更に成功したスレッドの再判定ができるように、helped_フラグも立てておく。
-			// 補足： recycle直後の状況では、val == recycled_zero_であるため、val != 0となり、ここには到達しない。
-			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_, std::memory_order_acq_rel ) ) {
+			// 補足： recycle直後の状況では、val == 1 であるため、val != 0となり、ここには到達しない。
+			if ( counter_.compare_exchange_strong( val, is_zero_ | helped_, ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst ) ) {
 				return 0;
 			}
 		}
@@ -156,8 +158,23 @@ struct basic_sticky_counter {
 	 */
 	bool is_sticky_zero( void ) const noexcept
 	{
-		rc_type val = counter_.load( std::memory_order_acquire );
+		rc_type val = counter_.load( ApplyOptimizedMemoryOrder ? std::memory_order_acquire : std::memory_order_seq_cst );
 		return ( val & is_zero_ ) != 0;
+	}
+
+	/**
+	 * @brief 再利用するために、カウンタの状態を初期化しなおす。
+	 *
+	 * @pre
+	 * このAPIを利用できるのは、decrement_then_is_zero()がtrueで帰ってきたスレッドであること。
+	 * そうでない場合、何らかの方法で、このカウンターがすでに参照されていないことを外部ロジックで保証されていること。
+	 *
+	 * @warning
+	 * 事前条件が守られない場合、stickyではなくなってしまい、異常なリファレンスカウンタとして動作する。結果として、メモリ破壊等の異常状態に至る。
+	 */
+	void recycle( void ) noexcept
+	{
+		return counter_.store( 1, ApplyOptimizedMemoryOrder ? std::memory_order_release : std::memory_order_seq_cst );
 	}
 
 	static constexpr rc_type max( void )

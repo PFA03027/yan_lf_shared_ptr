@@ -34,3 +34,6 @@ target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:ENABLE_STICK
 #
 # TEST_ENABLE_LOGICCHECKER
 target_compile_definitions(${EXEC_TARGET} PRIVATE $<$<CONFIG:Debug>:TEST_ENABLE_LOGICCHECKER>)
+
+target_compile_definitions(${EXEC_TARGET} PRIVATE YAN_LF_QUEUE_DEBUG_CODE)
+
