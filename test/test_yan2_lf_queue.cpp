@@ -232,7 +232,8 @@ TEST( TestYanRcLfQueue, Empty_CanPushPushHighload )
 {
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
-	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
+	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
+	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 2;
@@ -282,6 +283,10 @@ TEST( TestYanRcLfQueue, Empty_CanPushPushHighload )
 
 	auto opt_ret = sut.try_pop();
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
+
+	// Cleanup
+	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 
 #endif
@@ -291,7 +296,8 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 {
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
-	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
+	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
+	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 2;
@@ -346,6 +352,10 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 
 	auto opt_ret = sut.try_pop();
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
+
+	// Cleanup
+	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 
 #endif
@@ -355,7 +365,8 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 {
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
-	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
+	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
+	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 2;
@@ -414,6 +425,10 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 	EXPECT_EQ( total_count, total_loop_count );
 	auto opt_ret = sut.try_pop();
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
+
+	// // Cleanup
+	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 
 #endif

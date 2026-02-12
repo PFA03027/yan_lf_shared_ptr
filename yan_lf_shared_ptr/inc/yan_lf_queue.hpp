@@ -484,6 +484,15 @@ public:
 		return std::nullopt;
 	}
 
+	// 値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのフリーノードを開放する。
+	static size_t deallocate_all_free_nodes( void ) noexcept
+	{
+		size_t ans = tl_retire_node_list_.deallocate_all();
+		ans += free_node_list_.deallocate_all();
+		ans += primary_retired_node_list_.deallocate_all();
+		return ans;
+	}
+
 private:
 	struct stickey_counter_decrement_guard {
 		~stickey_counter_decrement_guard( void ) noexcept
@@ -636,16 +645,19 @@ private:
 			other.p_head_ = other.p_tail_ = nullptr;   // Clear the other list after merging
 		}
 
-		// すべてのノードで、値のdestruct_value()が行われていることを前提として、すべてのノードを開放する。
-		void deallocate_all( void ) noexcept
+		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
+		size_t deallocate_all( void ) noexcept
 		{
-			node* p_cur_node = p_head_;
+			size_t ans        = 0;
+			node*  p_cur_node = p_head_;
 			while ( p_cur_node != nullptr ) {
 				node* p_nxt_node = p_cur_node->p_next_in_retire_;
 				deallocate_node( p_cur_node );
 				p_cur_node = p_nxt_node;
+				++ans;
 			}
 			p_head_ = p_tail_ = nullptr;
+			return ans;
 		}
 
 	private:
@@ -697,10 +709,10 @@ private:
 			ndl_.merge( other );
 		}
 
-		// すべてのノードで、値のdestruct_value()が行われていることを前提として、すべてのノードを開放する。
-		void deallocate_all( void ) noexcept
+		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
+		size_t deallocate_all( void ) noexcept
 		{
-			ndl_.deallocate_all();
+			return ndl_.deallocate_all();
 		}
 
 	private:
@@ -754,6 +766,13 @@ private:
 			ndl_.merge( other.ndl_ );
 		}
 
+		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
+		size_t deallocate_all( void ) noexcept
+		{
+			std::lock_guard<std::mutex> lock( mtx_ );
+			return ndl_.deallocate_all();
+		}
+
 	private:
 		std::mutex        mtx_;
 		retired_node_list ndl_;
@@ -794,6 +813,13 @@ private:
 				return nullptr;
 			}
 			return ndl_.pop_front();
+		}
+
+		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
+		size_t deallocate_all( void ) noexcept
+		{
+			std::lock_guard<std::mutex> lock( mtx_ );
+			return ndl_.deallocate_all();
 		}
 
 	private:
