@@ -300,6 +300,57 @@ private:
 
 namespace yan2 {   // yet another
 
+namespace itl {
+struct stickey_counter_decrement_guard {
+	~stickey_counter_decrement_guard( void ) noexcept
+	{
+		if ( p_rc_ != nullptr ) {
+			p_rc_->decrement_then_is_zero();
+		}
+	}
+	stickey_counter_decrement_guard( void ) noexcept
+	  : p_rc_( nullptr )
+	{
+	}
+	stickey_counter_decrement_guard( const stickey_counter_decrement_guard& )            = delete;
+	stickey_counter_decrement_guard& operator=( const stickey_counter_decrement_guard& ) = delete;
+	stickey_counter_decrement_guard( stickey_counter_decrement_guard&& other ) noexcept
+	  : p_rc_( other.p_rc_ )
+	{
+		other.p_rc_ = nullptr;
+	}
+	stickey_counter_decrement_guard& operator=( stickey_counter_decrement_guard&& other ) noexcept
+	{
+		if ( this == &other ) {
+			return *this;
+		}
+
+		if ( p_rc_ != nullptr ) {
+			p_rc_->decrement_then_is_zero();
+		}
+		p_rc_       = other.p_rc_;
+		other.p_rc_ = nullptr;
+		return *this;
+	}
+
+	explicit stickey_counter_decrement_guard( rc::sticky_counter& rc_arg ) noexcept
+	  : p_rc_( &rc_arg )
+	{
+	}
+
+	auto read_count( void ) const noexcept
+	{
+		decltype( p_rc_->read() ) ans = 0;
+		if ( p_rc_ != nullptr ) {
+			ans = p_rc_->read();
+		}
+		return ans;
+	}
+
+	rc::sticky_counter* p_rc_;
+};
+}   // namespace itl
+
 /**
  * @brief lock-free queue based on reference counter
  *
@@ -364,13 +415,13 @@ public:
 	std::optional<T> try_pop( void )
 	{
 		while ( true ) {
-			stickey_counter_decrement_guard expect_head_rc_g;
-			node*                           p_expect_head_node = nullptr;
+			itl::stickey_counter_decrement_guard expect_head_rc_g;
+			node*                                p_expect_head_node = nullptr;
 			while ( true ) {
 				p_expect_head_node    = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 				bool get_head_node_rc = p_expect_head_node->rc_.increment_if_not_zero();
 				if ( get_head_node_rc ) {
-					expect_head_rc_g      = stickey_counter_decrement_guard( p_expect_head_node->rc_ );
+					expect_head_rc_g      = itl::stickey_counter_decrement_guard( p_expect_head_node->rc_ );
 					node* p_chk_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_head_node == p_chk_head_node ) {
 						break;
@@ -386,9 +437,9 @@ public:
 			MY_RUNTIME_ASSERT( p_expect_head_node->rc_.read() > 0, "p_expect_head_node has zero reference count" );
 #endif
 
-			stickey_counter_decrement_guard expect_next_rc_g;
-			node*                           p_expect_next_node                = nullptr;
-			bool                            is_success_next_node_rc_increment = false;
+			itl::stickey_counter_decrement_guard expect_next_rc_g;
+			node*                                p_expect_next_node                = nullptr;
+			bool                                 is_success_next_node_rc_increment = false;
 			while ( true ) {
 				p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
 				if ( p_expect_next_node == nullptr ) {
@@ -397,7 +448,7 @@ public:
 
 				bool get_next_node_rc = p_expect_next_node->rc_.increment_if_not_zero();
 				if ( get_next_node_rc ) {
-					expect_next_rc_g      = stickey_counter_decrement_guard( p_expect_next_node->rc_ );
+					expect_next_rc_g      = itl::stickey_counter_decrement_guard( p_expect_next_node->rc_ );
 					node* p_chk_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_next_node == p_chk_next_node ) {
 						is_success_next_node_rc_increment = true;
@@ -419,21 +470,28 @@ public:
 			MY_RUNTIME_ASSERT( p_expect_next_node->rc_.read() > 0, "p_expect_next_node has zero reference count" );
 #endif
 
-			stickey_counter_decrement_guard expect_tail_rc_g;
-			node*                           p_expect_tail_node = nullptr;
+			itl::stickey_counter_decrement_guard expect_tail_rc_g;
+			node*                                p_expect_tail_node                = nullptr;
+			bool                                 is_success_tail_node_rc_increment = false;
 			while ( true ) {
 				p_expect_tail_node    = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 				bool get_tail_node_rc = p_expect_tail_node->rc_.increment_if_not_zero();
 				if ( get_tail_node_rc ) {
-					expect_tail_rc_g      = stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
+					expect_tail_rc_g      = itl::stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
 					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_tail_node == p_chk_tail_node ) {
+						is_success_tail_node_rc_increment = true;
 						break;
 					}
 					// tailノードが変化していたので、再度やり直す。
 				} else {
-					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
+					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
+					break;
 				}
+			}
+			if ( !is_success_tail_node_rc_increment ) {
+				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
+				continue;
 			}
 
 #ifdef YAN_LF_QUEUE_DEBUG_CODE
@@ -494,55 +552,6 @@ public:
 	}
 
 private:
-	struct stickey_counter_decrement_guard {
-		~stickey_counter_decrement_guard( void ) noexcept
-		{
-			if ( p_rc_ != nullptr ) {
-				p_rc_->decrement_then_is_zero();
-			}
-		}
-		stickey_counter_decrement_guard( void ) noexcept
-		  : p_rc_( nullptr )
-		{
-		}
-		stickey_counter_decrement_guard( const stickey_counter_decrement_guard& )            = delete;
-		stickey_counter_decrement_guard& operator=( const stickey_counter_decrement_guard& ) = delete;
-		stickey_counter_decrement_guard( stickey_counter_decrement_guard&& other ) noexcept
-		  : p_rc_( other.p_rc_ )
-		{
-			other.p_rc_ = nullptr;
-		}
-		stickey_counter_decrement_guard& operator=( stickey_counter_decrement_guard&& other ) noexcept
-		{
-			if ( this == &other ) {
-				return *this;
-			}
-
-			if ( p_rc_ != nullptr ) {
-				p_rc_->decrement_then_is_zero();
-			}
-			p_rc_       = other.p_rc_;
-			other.p_rc_ = nullptr;
-			return *this;
-		}
-
-		explicit stickey_counter_decrement_guard( rc::sticky_counter& rc_arg ) noexcept
-		  : p_rc_( &rc_arg )
-		{
-		}
-
-		auto read_count( void ) const noexcept
-		{
-			decltype( p_rc_->read() ) ans = 0;
-			if ( p_rc_ != nullptr ) {
-				ans = p_rc_->read();
-			}
-			return ans;
-		}
-
-		rc::sticky_counter* p_rc_;
-	};
-
 	struct node {
 		rc::sticky_counter rc_;                 // このノードを参照しているスレッド数を示すreference counter
 		std::atomic<node*> ap_next_;            // 次のノードへのポインタ
@@ -844,13 +853,13 @@ private:
 		MY_RUNTIME_ASSERT( rc_val >= 1, "p_pushed_new_tail has invalid reference count(=" + std::to_string( rc_val ) + ")" );
 #endif
 		while ( true ) {
-			stickey_counter_decrement_guard expect_tail_rc_g;
-			node*                           p_expect_tail_node = nullptr;
+			itl::stickey_counter_decrement_guard expect_tail_rc_g;
+			node*                                p_expect_tail_node = nullptr;
 			while ( true ) {
 				p_expect_tail_node    = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 				bool get_tail_node_rc = p_expect_tail_node->rc_.increment_if_not_zero();
 				if ( get_tail_node_rc ) {
-					expect_tail_rc_g      = stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
+					expect_tail_rc_g      = itl::stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
 					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_tail_node == p_chk_tail_node ) {
 						break;

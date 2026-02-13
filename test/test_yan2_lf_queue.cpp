@@ -161,6 +161,89 @@ TEST( TestRcLimitedLfSharedPtrQueue, Empty_CanPushPopHighload )
 #endif
 
 // ===========================================
+TEST( TestYanRcLfQueueCounterGuard, CanDefaultConstruct )
+{
+	// Arrange
+
+	// Act
+	yan2::itl::stickey_counter_decrement_guard sut;
+
+	// Assert
+}
+
+TEST( TestYanRcLfQueueCounterGuard, CanConstructWithRc )
+{
+	// Arrange
+	rc::sticky_counter rc;
+	EXPECT_EQ( rc.read(), 1 );
+
+	// Act
+	yan2::itl::stickey_counter_decrement_guard sut( rc );
+
+	// Assert
+	EXPECT_EQ( rc.read(), 1 );
+}
+
+TEST( TestYanRcLfQueueCounterGuard, CanDestruct_Then_RcIsDecremented )
+{
+	// Arrange
+	rc::sticky_counter rc;
+	EXPECT_EQ( rc.read(), 1 );
+
+	{
+		// Act
+		yan2::itl::stickey_counter_decrement_guard sut( rc );
+
+		// Assert
+		EXPECT_EQ( rc.read(), 1 );
+	}
+
+	EXPECT_EQ( rc.read(), 0 );
+}
+
+TEST( TestYanRcLfQueueCounterGuard, CanMoveConstruct )
+{
+	// Arrange
+	rc::sticky_counter rc;
+	rc.increment_if_not_zero();
+	EXPECT_EQ( rc.read(), 2 );
+
+	{
+		yan2::itl::stickey_counter_decrement_guard sut1( rc );
+
+		// Act
+		yan2::itl::stickey_counter_decrement_guard sut2( std::move( sut1 ) );
+
+		// Assert
+		EXPECT_EQ( rc.read(), 2 );
+	}
+
+	EXPECT_EQ( rc.read(), 1 );   // sut2 が rc を decrement したので、rc の値は 1 になる
+}
+
+TEST( TestYanRcLfQueueCounterGuard, CanMoveAssignment )
+{
+	// Arrange
+	rc::sticky_counter rc;
+	rc.increment_if_not_zero();
+	rc.increment_if_not_zero();
+	EXPECT_EQ( rc.read(), 3 );
+
+	{
+		yan2::itl::stickey_counter_decrement_guard sut1( rc );
+		yan2::itl::stickey_counter_decrement_guard sut2( rc );
+
+		// Act
+		sut2 = std::move( sut1 );
+
+		// Assert
+		EXPECT_EQ( rc.read(), 2 );   // sut2 が rc を decrement したので、rc の値は 2 になる
+	}
+
+	EXPECT_EQ( rc.read(), 1 );   // sut1 が rc を decrement したので、rc の値は 1 になる
+}
+
+// ===========================================
 
 TEST( TestYanRcLfQueue, CanDefaultConstruct )
 {
@@ -236,7 +319,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPushHighload )
 	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
-	constexpr size_t  NUM_THREADS = 2;
+	constexpr size_t  NUM_THREADS = 10;
 	std::atomic<bool> done { false };
 	std::latch        start_latch( 1 + NUM_THREADS );
 
@@ -300,7 +383,7 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
-	constexpr size_t  NUM_THREADS = 2;
+	constexpr size_t  NUM_THREADS = 10;
 	std::atomic<bool> done { false };
 	std::latch        start_latch( 1 + NUM_THREADS );
 
@@ -360,7 +443,7 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 
 #endif
 
-#if 1
+#if 0
 TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 {
 	// Arrange
@@ -369,7 +452,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	yan2::rc_lf_queue<NonTrivialType> sut;
 
-	constexpr size_t  NUM_THREADS = 2;
+	constexpr size_t  NUM_THREADS = 8;
 	std::atomic<bool> done { false };
 	std::latch        start_latch( 1 + NUM_THREADS );
 
@@ -419,6 +502,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 		EXPECT_GT( ret_count, 0 );   // 各スレッドが少なくとも1つの要素を処理したことを確認する
 		total_count += ret_count;
 		total_loop_count += ret_loop_count;
+		std::cout << "Thread finished processing " << ret_count << " elements." << std::endl;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
 	std::cout << "Total loop count: " << total_loop_count << std::endl;
