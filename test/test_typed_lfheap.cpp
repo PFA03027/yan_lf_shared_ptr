@@ -15,59 +15,29 @@
 
 #include <gtest/gtest.h>
 
-TEST( RcItlHeapElementWithTrivialType, CanConstructDestruct )
+TEST( Lfheap2HeapElementWithTrivialType, CanConstructDestruct )
 {
 	// Arrange
 
 	// Act
-	lfheap::heap_element<int> sut;
+	lfheap::itl::heap_element<int> sut;
 
 	// Assert
 }
 
-#if 0
-TEST( RcItlHeapElementWithTrivialType, CanStoreAndLoadValue )
-{
-	// Arrange
-	lfheap::heap_element<int> sut;
-
-	// Act
-	sut.store( 42 );
-
-	// Assert
-	EXPECT_EQ( sut.ref(), 42 );
-}
-#endif
-
-TEST( RcItlHeapElementWithNonTrivialType, CanConstructDestruct )
+TEST( Lfheap2HeapElementWithNonTrivialType, CanConstructDestruct )
 {
 	// Arrange
 
 	// Act
-	lfheap::heap_element<NonTrivialType> sut;
+	lfheap::itl::heap_element<NonTrivialType> sut;
 
 	// Assert
 }
-#if 0
-TEST( RcItlHeapElementWithNonTrivialType, CanStoreAndLoadValue )
-{
-	// Arrange
-	lfheap::heap_element<NonTrivialType> sut;
-
-	// Act
-	sut.store( NonTrivialType() );
-
-	// Assert
-	EXPECT_EQ( sut.ref().get_value(), 42 );
-
-	// Clean up
-	sut.destruct_value();   // Ensure proper cleanup
-}
-#endif
 
 // =========================================================
 
-class RcLimitedArrayHeapWithTrivialType : public ::testing::Test {
+class TypedPoolHeapWithTrivialType : public ::testing::Test {
 protected:
 	void SetUp() override
 	{
@@ -81,26 +51,28 @@ protected:
 	}
 };
 
-TEST_F( RcLimitedArrayHeapWithTrivialType, FreeListIsEmpty_CanAllocate_ThenReturnNonNullptr )
+TEST_F( TypedPoolHeapWithTrivialType, FreeListIsEmpty_CanAllocate_ThenReturnNonNullptr )
 {
 	// Arrange
+	lfheap::typed_pool_heap<int> sut_allocator;
 
 	// Act
-	auto* p_elem = lfheap::typed_pool_heap<int>::allocate();
+	auto* p_elem = sut_allocator.allocate( 1 );
 
 	// Assert
 	EXPECT_NE( p_elem, nullptr );
 }
 
-TEST_F( RcLimitedArrayHeapWithTrivialType, FreeListIsNotEmpty_CanAllocate_ThenReturnNonNullptr )
+TEST_F( TypedPoolHeapWithTrivialType, FreeListIsNotEmpty_CanAllocate_ThenReturnNonNullptr )
 {
 	// Arrange
-	auto* p_elem = lfheap::typed_pool_heap<int>::allocate();
+	lfheap::typed_pool_heap<int> sut_allocator;
+	auto*                         p_elem = sut_allocator.allocate( 1 );
 	ASSERT_NE( p_elem, nullptr );
-	lfheap::typed_pool_heap<int>::retire( p_elem );
+	sut_allocator.deallocate( p_elem, 1 );
 
 	// Act
-	auto* p_sut = lfheap::typed_pool_heap<int>::allocate();
+	auto* p_sut = sut_allocator.allocate( 1 );
 
 	// Assert
 	EXPECT_NE( p_sut, nullptr );

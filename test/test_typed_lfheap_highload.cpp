@@ -20,24 +20,26 @@
 
 #include <gtest/gtest.h>
 
-TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
+TEST( TypedPoolHeapHighLoad, CanHandleHighLoad )
 {
 	// Arrange
-	constexpr size_t                                         NUM_THREADS = 20;
-	std::atomic<bool>                                        done { false };
-	std::atomic<lfheap::typed_pool_heap<int>::element_type*> duplicate_bug_check { nullptr };
+	using target_pointer                      = std::allocator_traits<lfheap::typed_pool_heap<int>>::pointer;
+	constexpr size_t              NUM_THREADS = 20;
+	std::atomic<bool>             done { false };
+	std::atomic<target_pointer>   duplicate_bug_check { nullptr };
+	lfheap::typed_pool_heap<int> sut_allocator;
 
 	// Act
 	std::vector<std::thread>         threads;
 	std::vector<std::future<size_t>> results;
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
-		std::packaged_task<size_t()> task( [&done, &duplicate_bug_check]() {
+		std::packaged_task<size_t()> task( [&done, &duplicate_bug_check, &sut_allocator]() {
 			size_t count = 0;
 			while ( !done.load() ) {
 				count++;
-				lfheap::typed_pool_heap<int>::element_type* p_elem = nullptr;
+				int* p_elem = nullptr;
 				try {
-					p_elem = lfheap::typed_pool_heap<int>::allocate();
+					p_elem = sut_allocator.allocate( 1 );
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during allocation: count = " << count << std::endl;
 					throw;
@@ -54,7 +56,7 @@ TEST( LimitedLfArrayheapHighLoad, CanHandleHighLoad )
 				}
 				try {
 					duplicate_bug_check.store( nullptr );   // Reset for next iteration
-					lfheap::typed_pool_heap<int>::retire( p_elem );
+					sut_allocator.deallocate( p_elem, 1 );
 				} catch ( const std::exception& e ) {
 					std::cerr << "Exception during retire: count = " << count << std::endl;
 					throw;

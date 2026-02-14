@@ -19,11 +19,11 @@
 TEST( YanLFSharedPtrWithTypedPoolHeap, CanAllocateShared )
 {
 	// Arrange
-	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
+	using AllocType = lfheap::typed_pool_heap<NonTrivialType>;
 	AllocType alloc;
 
 	// Act
-	auto sp_sut = yan2::allocate_lf_shared<NonTrivialType>( alloc, 42U );
+	auto sp_sut = yan::allocate_lf_shared<NonTrivialType>( alloc, 42U );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
@@ -33,9 +33,9 @@ TEST( YanLFSharedPtrWithTypedPoolHeap, CanAllocateShared )
 TEST( YanLFSharedPtrWithTypedPoolHeap, CanConstruct )
 {
 	// Arrange
-	using AllocType = lfheap2::typed_pool_heap<NonTrivialType>;
+	using AllocType = lfheap::typed_pool_heap<NonTrivialType>;
 	AllocType alloc;
-	using DeleterType = lfheap2::deleter_via_typed_pool_heap<NonTrivialType>;
+	using DeleterType = lfheap::deleter_via_typed_pool_heap<NonTrivialType>;
 	DeleterType deleter;
 
 	using allocator_traits_type = std::allocator_traits<AllocType>;
@@ -51,7 +51,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeap, CanConstruct )
 	}
 
 	// Act
-	yan2::lf_shared_ptr<NonTrivialType> sp_sut( p_new, deleter, alloc );
+	yan::lf_shared_ptr<NonTrivialType> sp_sut( p_new, deleter, alloc );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
