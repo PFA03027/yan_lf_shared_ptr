@@ -196,6 +196,71 @@ private:
 
 using sticky_counter = basic_sticky_counter<uint64_t>;
 
+struct stickey_counter_try_increment_guard {
+	~stickey_counter_try_increment_guard( void ) noexcept
+	{
+		if ( p_rc_ != nullptr ) {
+			p_rc_->decrement_then_is_zero();
+		}
+	}
+	stickey_counter_try_increment_guard( void ) noexcept
+	  : p_rc_( nullptr )
+	{
+	}
+	stickey_counter_try_increment_guard( const stickey_counter_try_increment_guard& )            = delete;
+	stickey_counter_try_increment_guard& operator=( const stickey_counter_try_increment_guard& ) = delete;
+	stickey_counter_try_increment_guard( stickey_counter_try_increment_guard&& other ) noexcept
+	  : p_rc_( other.p_rc_ )
+	{
+		other.p_rc_ = nullptr;
+	}
+	stickey_counter_try_increment_guard& operator=( stickey_counter_try_increment_guard&& other ) noexcept
+	{
+		if ( this == &other ) {
+			return *this;
+		}
+
+		if ( p_rc_ != nullptr ) {
+			p_rc_->decrement_then_is_zero();
+		}
+		p_rc_       = other.p_rc_;
+		other.p_rc_ = nullptr;
+		return *this;
+	}
+
+	explicit stickey_counter_try_increment_guard( rc::sticky_counter& rc_arg ) noexcept
+	  : p_rc_( nullptr )
+	{
+		bool is_success = rc_arg.increment_if_not_zero();
+		if ( is_success ) {
+			p_rc_ = &rc_arg;
+		}
+	}
+
+	/**
+	 * @brief stickey counterのincrement_if_not_zero()に成功しているかどうかを返す。
+	 *
+	 * @return true increment_if_not_zero()に成功した場合
+	 * @return false increment_if_not_zero()に失敗した場合（カウンタが0だった場合）
+	 */
+	bool owns_rc( void ) const noexcept
+	{
+		return ( p_rc_ != nullptr );
+	}
+
+	auto read_count( void ) const noexcept
+	{
+		decltype( p_rc_->read() ) ans = 0;
+		if ( p_rc_ != nullptr ) {
+			ans = p_rc_->read();
+		}
+		return ans;
+	}
+
+private:
+	rc::sticky_counter* p_rc_;
+};
+
 }   // namespace rc
 
 #endif

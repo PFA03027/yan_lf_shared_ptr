@@ -41,73 +41,6 @@ inline void my_runtime_assert_impl( bool expr, std::string expr_str, const char*
 
 namespace yan {   // yet another
 
-namespace itl {
-struct stickey_counter_try_increment_guard {
-	~stickey_counter_try_increment_guard( void ) noexcept
-	{
-		if ( p_rc_ != nullptr ) {
-			p_rc_->decrement_then_is_zero();
-		}
-	}
-	stickey_counter_try_increment_guard( void ) noexcept
-	  : p_rc_( nullptr )
-	{
-	}
-	stickey_counter_try_increment_guard( const stickey_counter_try_increment_guard& )            = delete;
-	stickey_counter_try_increment_guard& operator=( const stickey_counter_try_increment_guard& ) = delete;
-	stickey_counter_try_increment_guard( stickey_counter_try_increment_guard&& other ) noexcept
-	  : p_rc_( other.p_rc_ )
-	{
-		other.p_rc_ = nullptr;
-	}
-	stickey_counter_try_increment_guard& operator=( stickey_counter_try_increment_guard&& other ) noexcept
-	{
-		if ( this == &other ) {
-			return *this;
-		}
-
-		if ( p_rc_ != nullptr ) {
-			p_rc_->decrement_then_is_zero();
-		}
-		p_rc_       = other.p_rc_;
-		other.p_rc_ = nullptr;
-		return *this;
-	}
-
-	explicit stickey_counter_try_increment_guard( rc::sticky_counter& rc_arg ) noexcept
-	  : p_rc_( nullptr )
-	{
-		bool is_success = rc_arg.increment_if_not_zero();
-		if ( is_success ) {
-			p_rc_ = &rc_arg;
-		}
-	}
-
-	/**
-	 * @brief stickey counterのincrement_if_not_zero()に成功しているかどうかを返す。
-	 *
-	 * @return true increment_if_not_zero()に成功した場合
-	 * @return false increment_if_not_zero()に失敗した場合（カウンタが0だった場合）
-	 */
-	bool owns_rc( void ) const noexcept
-	{
-		return ( p_rc_ != nullptr );
-	}
-
-	auto read_count( void ) const noexcept
-	{
-		decltype( p_rc_->read() ) ans = 0;
-		if ( p_rc_ != nullptr ) {
-			ans = p_rc_->read();
-		}
-		return ans;
-	}
-
-private:
-	rc::sticky_counter* p_rc_;
-};
-}   // namespace itl
-
 /**
  * @brief lock-free queue based on reference counter
  *
@@ -518,11 +451,11 @@ private:
 	void push_impl( node* p_pushed_new_tail )
 	{
 		while ( true ) {
-			itl::stickey_counter_try_increment_guard expect_tail_rc_g;
-			node*                                    p_expect_tail_node = nullptr;
+			rc::stickey_counter_try_increment_guard expect_tail_rc_g;
+			node*                                   p_expect_tail_node = nullptr;
 			while ( true ) {
 				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_tail_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
+				expect_tail_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
 				if ( expect_tail_rc_g.owns_rc() ) {
 					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_tail_node == p_chk_tail_node ) {
@@ -557,11 +490,11 @@ private:
 	node* try_pop_impl( std::optional<T>& popped_value )
 	{
 		while ( true ) {
-			itl::stickey_counter_try_increment_guard expect_head_rc_g;
-			node*                                    p_expect_head_node = nullptr;
+			rc::stickey_counter_try_increment_guard expect_head_rc_g;
+			node*                                   p_expect_head_node = nullptr;
 			while ( true ) {
 				p_expect_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_head_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_head_node->rc_ );
+				expect_head_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_head_node->rc_ );
 				if ( expect_head_rc_g.owns_rc() ) {
 					node* p_chk_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_head_node == p_chk_head_node ) {
@@ -573,12 +506,12 @@ private:
 				}
 			}
 
-			itl::stickey_counter_try_increment_guard expect_tail_rc_g;
-			node*                                    p_expect_tail_node                = nullptr;
-			bool                                     is_success_tail_node_rc_increment = false;
+			rc::stickey_counter_try_increment_guard expect_tail_rc_g;
+			node*                                   p_expect_tail_node                = nullptr;
+			bool                                    is_success_tail_node_rc_increment = false;
 			while ( true ) {
 				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_tail_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
+				expect_tail_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
 				if ( expect_tail_rc_g.owns_rc() ) {
 					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_tail_node == p_chk_tail_node ) {
@@ -596,16 +529,16 @@ private:
 				continue;
 			}
 
-			itl::stickey_counter_try_increment_guard expect_next_rc_g;
-			node*                                    p_expect_next_node                = nullptr;
-			bool                                     is_success_next_node_rc_increment = false;
+			rc::stickey_counter_try_increment_guard expect_next_rc_g;
+			node*                                   p_expect_next_node                = nullptr;
+			bool                                    is_success_next_node_rc_increment = false;
 			while ( true ) {
 				p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
 				if ( p_expect_next_node == nullptr ) {
 					return nullptr;   // 本当に空っぽだったので、popを終了する。
 				}
 
-				expect_next_rc_g = itl::stickey_counter_try_increment_guard( p_expect_next_node->rc_ );
+				expect_next_rc_g = rc::stickey_counter_try_increment_guard( p_expect_next_node->rc_ );
 				if ( expect_next_rc_g.owns_rc() ) {
 					node* p_chk_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_next_node == p_chk_next_node ) {

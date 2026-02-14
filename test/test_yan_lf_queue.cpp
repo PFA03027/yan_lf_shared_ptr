@@ -31,7 +31,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanDefaultConstruct )
 	// Arrange
 
 	// Act
-	yan::itl::stickey_counter_try_increment_guard sut;
+	rc::stickey_counter_try_increment_guard sut;
 
 	// Assert
 	EXPECT_FALSE( sut.owns_rc() );
@@ -44,7 +44,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanConstructWithRc )
 	EXPECT_EQ( rc.read(), 1 );
 
 	// Act
-	yan::itl::stickey_counter_try_increment_guard sut( rc );
+	rc::stickey_counter_try_increment_guard sut( rc );
 
 	// Assert
 	EXPECT_EQ( rc.read(), 2 );
@@ -59,7 +59,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanDestruct_Then_RcIsDecremented )
 
 	{
 		// Act
-		yan::itl::stickey_counter_try_increment_guard sut( rc );
+		rc::stickey_counter_try_increment_guard sut( rc );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );
@@ -76,12 +76,12 @@ TEST( TestYanRcLfQueueCounterGuard, CanMoveConstruct )
 	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan::itl::stickey_counter_try_increment_guard sut1( rc );
+		rc::stickey_counter_try_increment_guard sut1( rc );
 		EXPECT_EQ( rc.read(), 2 );
 		EXPECT_TRUE( sut1.owns_rc() );
 
 		// Act
-		yan::itl::stickey_counter_try_increment_guard sut2( std::move( sut1 ) );
+		rc::stickey_counter_try_increment_guard sut2( std::move( sut1 ) );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );
@@ -99,8 +99,8 @@ TEST( TestYanRcLfQueueCounterGuard, CanMoveAssignment )
 	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan::itl::stickey_counter_try_increment_guard sut1( rc );
-		yan::itl::stickey_counter_try_increment_guard sut2( rc );
+		rc::stickey_counter_try_increment_guard sut1( rc );
+		rc::stickey_counter_try_increment_guard sut2( rc );
 		EXPECT_EQ( rc.read(), 3 );
 
 		// Act
