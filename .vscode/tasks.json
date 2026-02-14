@@ -1,0 +1,55 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "make BUILD_TYPE=Debug test with address sanitizer",
+			"type": "shell",
+			"command": "make BUILD_TYPE=Debug SANITIZER_TYPE=1 test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "make BUILD_TYPE=Debug test with thread sanitizer",
+			"type": "shell",
+			"command": "make BUILD_TYPE=Debug SANITIZER_TYPE=4 test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		},
+		{
+			"label": "make BUILD_TYPE=Debug build-test with address sanitizer",
+			"type": "shell",
+			"command": "make BUILD_TYPE=Debug SANITIZER_TYPE=1 build-test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				// "isDefault": true
+			}
+		},
+		{
+			"label": "make BUILD_TYPE=Debug build-test without sanitizer",
+			"type": "shell",
+			"command": "make BUILD_TYPE=Debug build-test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				// "isDefault": true
+			}
+		},
+		{
+			"label": "make test",
+			"type": "shell",
+			"command": "make test",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
