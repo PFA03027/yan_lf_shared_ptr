@@ -166,9 +166,10 @@ TEST( TestYanRcLfQueueCounterGuard, CanDefaultConstruct )
 	// Arrange
 
 	// Act
-	yan2::itl::stickey_counter_decrement_guard sut;
+	yan2::itl::stickey_counter_try_increment_guard sut;
 
 	// Assert
+	EXPECT_FALSE( sut.owns_rc() );
 }
 
 TEST( TestYanRcLfQueueCounterGuard, CanConstructWithRc )
@@ -178,10 +179,11 @@ TEST( TestYanRcLfQueueCounterGuard, CanConstructWithRc )
 	EXPECT_EQ( rc.read(), 1 );
 
 	// Act
-	yan2::itl::stickey_counter_decrement_guard sut( rc );
+	yan2::itl::stickey_counter_try_increment_guard sut( rc );
 
 	// Assert
-	EXPECT_EQ( rc.read(), 1 );
+	EXPECT_EQ( rc.read(), 2 );
+	EXPECT_TRUE( sut.owns_rc() );
 }
 
 TEST( TestYanRcLfQueueCounterGuard, CanDestruct_Then_RcIsDecremented )
@@ -192,30 +194,34 @@ TEST( TestYanRcLfQueueCounterGuard, CanDestruct_Then_RcIsDecremented )
 
 	{
 		// Act
-		yan2::itl::stickey_counter_decrement_guard sut( rc );
+		yan2::itl::stickey_counter_try_increment_guard sut( rc );
 
 		// Assert
-		EXPECT_EQ( rc.read(), 1 );
+		EXPECT_EQ( rc.read(), 2 );
+		EXPECT_TRUE( sut.owns_rc() );
 	}
 
-	EXPECT_EQ( rc.read(), 0 );
+	EXPECT_EQ( rc.read(), 1 );
 }
 
 TEST( TestYanRcLfQueueCounterGuard, CanMoveConstruct )
 {
 	// Arrange
 	rc::sticky_counter rc;
-	rc.increment_if_not_zero();
-	EXPECT_EQ( rc.read(), 2 );
+	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan2::itl::stickey_counter_decrement_guard sut1( rc );
+		yan2::itl::stickey_counter_try_increment_guard sut1( rc );
+		EXPECT_EQ( rc.read(), 2 );
+		EXPECT_TRUE( sut1.owns_rc() );
 
 		// Act
-		yan2::itl::stickey_counter_decrement_guard sut2( std::move( sut1 ) );
+		yan2::itl::stickey_counter_try_increment_guard sut2( std::move( sut1 ) );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );
+		EXPECT_TRUE( sut2.owns_rc() );
+		EXPECT_FALSE( sut1.owns_rc() );
 	}
 
 	EXPECT_EQ( rc.read(), 1 );   // sut2 が rc を decrement したので、rc の値は 1 になる
@@ -225,19 +231,20 @@ TEST( TestYanRcLfQueueCounterGuard, CanMoveAssignment )
 {
 	// Arrange
 	rc::sticky_counter rc;
-	rc.increment_if_not_zero();
-	rc.increment_if_not_zero();
-	EXPECT_EQ( rc.read(), 3 );
+	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan2::itl::stickey_counter_decrement_guard sut1( rc );
-		yan2::itl::stickey_counter_decrement_guard sut2( rc );
+		yan2::itl::stickey_counter_try_increment_guard sut1( rc );
+		yan2::itl::stickey_counter_try_increment_guard sut2( rc );
+		EXPECT_EQ( rc.read(), 3 );
 
 		// Act
 		sut2 = std::move( sut1 );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );   // sut2 が rc を decrement したので、rc の値は 2 になる
+		EXPECT_TRUE( sut2.owns_rc() );
+		EXPECT_FALSE( sut1.owns_rc() );
 	}
 
 	EXPECT_EQ( rc.read(), 1 );   // sut1 が rc を decrement したので、rc の値は 1 になる
@@ -443,7 +450,7 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 
 #endif
 
-#if 0
+#if 1
 TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 {
 	// Arrange

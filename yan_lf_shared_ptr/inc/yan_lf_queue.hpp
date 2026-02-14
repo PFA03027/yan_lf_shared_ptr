@@ -18,6 +18,7 @@
 #include <stdexcept>
 #include <type_traits>
 #ifdef YAN_LF_QUEUE_DEBUG_CODE
+#include <iostream>
 #include <string>
 
 inline void my_runtime_assert_impl( bool expr, std::string expr_str, const char* file, int line )
@@ -301,25 +302,25 @@ private:
 namespace yan2 {   // yet another
 
 namespace itl {
-struct stickey_counter_decrement_guard {
-	~stickey_counter_decrement_guard( void ) noexcept
+struct stickey_counter_try_increment_guard {
+	~stickey_counter_try_increment_guard( void ) noexcept
 	{
 		if ( p_rc_ != nullptr ) {
 			p_rc_->decrement_then_is_zero();
 		}
 	}
-	stickey_counter_decrement_guard( void ) noexcept
+	stickey_counter_try_increment_guard( void ) noexcept
 	  : p_rc_( nullptr )
 	{
 	}
-	stickey_counter_decrement_guard( const stickey_counter_decrement_guard& )            = delete;
-	stickey_counter_decrement_guard& operator=( const stickey_counter_decrement_guard& ) = delete;
-	stickey_counter_decrement_guard( stickey_counter_decrement_guard&& other ) noexcept
+	stickey_counter_try_increment_guard( const stickey_counter_try_increment_guard& )            = delete;
+	stickey_counter_try_increment_guard& operator=( const stickey_counter_try_increment_guard& ) = delete;
+	stickey_counter_try_increment_guard( stickey_counter_try_increment_guard&& other ) noexcept
 	  : p_rc_( other.p_rc_ )
 	{
 		other.p_rc_ = nullptr;
 	}
-	stickey_counter_decrement_guard& operator=( stickey_counter_decrement_guard&& other ) noexcept
+	stickey_counter_try_increment_guard& operator=( stickey_counter_try_increment_guard&& other ) noexcept
 	{
 		if ( this == &other ) {
 			return *this;
@@ -333,9 +334,24 @@ struct stickey_counter_decrement_guard {
 		return *this;
 	}
 
-	explicit stickey_counter_decrement_guard( rc::sticky_counter& rc_arg ) noexcept
-	  : p_rc_( &rc_arg )
+	explicit stickey_counter_try_increment_guard( rc::sticky_counter& rc_arg ) noexcept
+	  : p_rc_( nullptr )
 	{
+		bool is_success = rc_arg.increment_if_not_zero();
+		if ( is_success ) {
+			p_rc_ = &rc_arg;
+		}
+	}
+
+	/**
+	 * @brief stickey counterのincrement_if_not_zero()に成功しているかどうかを返す。
+	 *
+	 * @return true increment_if_not_zero()に成功した場合
+	 * @return false increment_if_not_zero()に失敗した場合（カウンタが0だった場合）
+	 */
+	bool owns_rc( void ) const noexcept
+	{
+		return ( p_rc_ != nullptr );
 	}
 
 	auto read_count( void ) const noexcept
@@ -347,6 +363,7 @@ struct stickey_counter_decrement_guard {
 		return ans;
 	}
 
+private:
 	rc::sticky_counter* p_rc_;
 };
 }   // namespace itl
@@ -375,7 +392,6 @@ public:
 		// 先頭の番兵ノードだけ、特別扱いする。
 		// 番兵ノードが保持する値はすでに読み出されているので、関連するリソース解放の必要はないため。
 		node* p_nxt_node = p_cur_node->ap_next_.load();
-		p_cur_node->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()でインクリメントされた分を相殺するためのもの。
 		retire_node( p_cur_node );
 
 		// 順次、保持している値をデストラクトした後、ノードを開放する。
@@ -383,7 +399,6 @@ public:
 			p_cur_node = p_nxt_node;
 			p_cur_node->destruct_value();
 			p_nxt_node = p_cur_node->ap_next_.load();
-			p_cur_node->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()でインクリメントされた分を相殺するためのもの。
 			retire_node( p_cur_node );
 		}
 	}
@@ -391,7 +406,6 @@ public:
 	  : ap_que_head_( allocate_node() )   // 番兵ノードを準備する
 	  , ap_que_tail_( ap_que_head_.load() )
 	{
-		MY_RUNTIME_ASSERT( ap_que_head_.load()->rc_.read() > 0, "ap_que_head_ has zero reference count" );
 	}
 	rc_lf_queue( const rc_lf_queue& )            = delete;
 	rc_lf_queue& operator=( const rc_lf_queue& ) = delete;
@@ -412,134 +426,14 @@ public:
 
 		push_impl( p_pushed_new_tail );
 	}
+
 	std::optional<T> try_pop( void )
 	{
-		while ( true ) {
-			itl::stickey_counter_decrement_guard expect_head_rc_g;
-			node*                                p_expect_head_node = nullptr;
-			while ( true ) {
-				p_expect_head_node    = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				bool get_head_node_rc = p_expect_head_node->rc_.increment_if_not_zero();
-				if ( get_head_node_rc ) {
-					expect_head_rc_g      = itl::stickey_counter_decrement_guard( p_expect_head_node->rc_ );
-					node* p_chk_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_head_node == p_chk_head_node ) {
-						break;
-					}
-					// headノードが変化していたので、再度やり直す。
-				} else {
-					// headノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
-				}
-			}
+		std::optional<T> ans             = std::nullopt;
+		node*            p_detached_node = try_pop_impl( ans );
 
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_expect_head_node->rc_.read() > 0, "p_expect_head_node has zero reference count" );
-#endif
-
-			itl::stickey_counter_decrement_guard expect_next_rc_g;
-			node*                                p_expect_next_node                = nullptr;
-			bool                                 is_success_next_node_rc_increment = false;
-			while ( true ) {
-				p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
-				if ( p_expect_next_node == nullptr ) {
-					return std::nullopt;   // 本当に空っぽだったので、popを終了する。
-				}
-
-				bool get_next_node_rc = p_expect_next_node->rc_.increment_if_not_zero();
-				if ( get_next_node_rc ) {
-					expect_next_rc_g      = itl::stickey_counter_decrement_guard( p_expect_next_node->rc_ );
-					node* p_chk_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_next_node == p_chk_next_node ) {
-						is_success_next_node_rc_increment = true;
-						break;
-					}
-					// nextノードが変化していたので、nextノードに対するリファレンスカウンタ取得をやり直す。
-				} else {
-					// nextノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
-					break;
-				}
-			}
-			if ( !is_success_next_node_rc_increment ) {
-				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
-				continue;
-			}
-
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_expect_next_node->rc_.read() > 0, "p_expect_next_node has zero reference count" );
-#endif
-
-			itl::stickey_counter_decrement_guard expect_tail_rc_g;
-			node*                                p_expect_tail_node                = nullptr;
-			bool                                 is_success_tail_node_rc_increment = false;
-			while ( true ) {
-				p_expect_tail_node    = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				bool get_tail_node_rc = p_expect_tail_node->rc_.increment_if_not_zero();
-				if ( get_tail_node_rc ) {
-					expect_tail_rc_g      = itl::stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
-					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_tail_node == p_chk_tail_node ) {
-						is_success_tail_node_rc_increment = true;
-						break;
-					}
-					// tailノードが変化していたので、再度やり直す。
-				} else {
-					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
-					break;
-				}
-			}
-			if ( !is_success_tail_node_rc_increment ) {
-				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
-				continue;
-			}
-
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_expect_head_node->rc_.read() > 0, "p_expect_head_node has zero reference count" );
-			MY_RUNTIME_ASSERT( p_expect_tail_node->rc_.read() > 0, "p_expect_tail_node has zero reference count" );
-			MY_RUNTIME_ASSERT( p_expect_next_node->rc_.read() > 0, "p_expect_next_node has zero reference count" );
-#endif
-
-			// ここに到達した時点で、p_expect_head_node, p_expect_tail_node, p_expect_next_nodeはnullptrでないことが保証されている。
-			if ( p_expect_head_node == p_expect_tail_node ) {
-				// queueが空かもしれないが、tailの更新が遅れているだけかもしれない
-				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
-				// tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
-			} else {
-				if ( ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
-					// headが獲得できたので、nextの保存されている値情報を取り出す。
-					// もともとのアルゴリズムでは、このv_の読み出しは、ap_que_head_.compare_exchange_strong()前で行っている。
-					// これは、ABA問題を避けるために先行読み出しを行う必要があったから、そのように実装されている。
-					// しかし、一方でその実装だと、Thread Sanitizerがレースコンディションのエラーを指摘してくる。
-					// Thread Sanitizerの指摘を避けるためには、ABA問題を避けつつ、ap_que_head_.compare_exchange_strong()の後に読み出す必要がある。
-					// これを実現するには、p_expect_next_nodeに対してのABA問題を避けるために、ハザードポインタを用いる方法が基本である。
-					// この実装では、ハザードポインタの代わりにリファレンスカウンタを用いるので、p_expect_next_nodeに対してリファレンスカウンタを
-					// 適用し、p_expect_next_nodeに対してのABA問題を避ける方策を採った。
-					if constexpr ( std::is_move_constructible<T>::value ) {
-						T ans( std::move( p_expect_next_node->v_ ) );
-						p_expect_next_node->destruct_value();   // moveしたので、nodeが保持する値のデストラクトを行う。
-
-						// pop処理が完了したので、headをnodeプールへ返却する。
-						p_expect_head_node->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()でインクリメントされた分を相殺するためのもの。
-						retire_node( p_expect_head_node );
-						return ans;
-					} else {
-						T ans( p_expect_next_node->v_ );
-						p_expect_next_node->destruct_value();   // copyしたので、nodeが保持する値のデストラクトを行う。
-
-						// pop処理が完了したので、headをnodeプールへ返却する。
-						p_expect_head_node->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()でインクリメントされた分を相殺するためのもの。
-						retire_node( p_expect_head_node );
-						return ans;
-					}
-				} else {
-					// headの獲得に失敗したので、最初からやり直す。
-				}
-			}
-		}
-
-		return std::nullopt;
+		retire_node( p_detached_node );
+		return ans;
 	}
 
 	// 値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのフリーノードを開放する。
@@ -699,6 +593,15 @@ private:
 				return nullptr;
 			}
 
+#if 1
+			if ( p_poped->rc_.is_sticky_zero() ) {
+				return p_poped;
+			}
+
+			// まだ参照しているスレッドがいるので、取り出せない。再度すぐにチェックするのは無駄なので、FIFOキューの後ろに回す。
+			ndl_.push_back( p_poped );
+			return nullptr;
+#else
 			if ( p_poped->rc_.read() != 0 ) {
 				// まだ参照しているスレッドがいるので、取り出せない。再度すぐにチェックするのは無駄なので、FIFOキューの後ろに回す。
 				ndl_.push_back( p_poped );
@@ -706,6 +609,7 @@ private:
 			}
 
 			return p_poped;
+#endif
 		}
 
 		void merge( node_list& other ) noexcept
@@ -715,7 +619,7 @@ private:
 
 		void merge( retired_node_list& other ) noexcept
 		{
-			ndl_.merge( other );
+			ndl_.merge( other.ndl_ );
 		}
 
 		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
@@ -728,6 +632,41 @@ private:
 		node_list ndl_;
 
 		friend class mutex_retired_node_list;
+		friend class tl_retired_node_list;
+	};
+
+	class tl_retired_node_list {
+	public:
+		~tl_retired_node_list( void )
+		{
+			primary_retired_node_list_.merge( ndl_ );
+		}
+		constexpr tl_retired_node_list( void ) = default;
+
+		void push_back( node* p_node ) noexcept
+		{
+			ndl_.push_back( p_node );
+		}
+		void push_front( node* p_node ) noexcept
+		{
+			ndl_.push_front( p_node );
+		}
+
+		// リストの先頭の要素のリファレンスカウンタの値をチェックして、ゼロであれば取り出す。
+		// 戻り値のリファレンスカウンタ値はゼロのままで返す。
+		node* check_and_pop( void ) noexcept
+		{
+			return ndl_.check_and_pop();
+		}
+
+		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
+		size_t deallocate_all( void ) noexcept
+		{
+			return ndl_.deallocate_all();
+		}
+
+	private:
+		retired_node_list ndl_;
 	};
 
 	class mutex_retired_node_list {
@@ -772,7 +711,7 @@ private:
 		void merge( retired_node_list& other ) noexcept
 		{
 			std::lock_guard<std::mutex> lock( mtx_ );
-			ndl_.merge( other.ndl_ );
+			ndl_.merge( other );
 		}
 
 		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
@@ -836,58 +775,31 @@ private:
 		node_list  ndl_;
 	};
 
-	class thread_local_retired_node_list_cleaner {
-	public:
-		thread_local_retired_node_list_cleaner( void ) = default;
-
-		~thread_local_retired_node_list_cleaner( void )
-		{
-			primary_retired_node_list_.merge( tl_retire_node_list_ );   // Merge the thread-local retired elements list into the primary list
-		}
-	};
-
 	void push_impl( node* p_pushed_new_tail )
 	{
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-		auto rc_val = p_pushed_new_tail->rc_.read();
-		MY_RUNTIME_ASSERT( rc_val >= 1, "p_pushed_new_tail has invalid reference count(=" + std::to_string( rc_val ) + ")" );
-#endif
 		while ( true ) {
-			itl::stickey_counter_decrement_guard expect_tail_rc_g;
-			node*                                p_expect_tail_node = nullptr;
+			itl::stickey_counter_try_increment_guard expect_tail_rc_g;
+			node*                                    p_expect_tail_node = nullptr;
 			while ( true ) {
-				p_expect_tail_node    = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				bool get_tail_node_rc = p_expect_tail_node->rc_.increment_if_not_zero();
-				if ( get_tail_node_rc ) {
-					expect_tail_rc_g      = itl::stickey_counter_decrement_guard( p_expect_tail_node->rc_ );
+				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+				expect_tail_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
+				if ( expect_tail_rc_g.owns_rc() ) {
 					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
 					if ( p_expect_tail_node == p_chk_tail_node ) {
 						break;
 					}
 					// tailノードが変化していたので、再度やり直す。
 				} else {
-					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
+					// tailノードの参照カウンタが０に到達済みなので、すでに、pop済みで他のスレッドが解放処理中かもしれない。最初からやり直す。
 				}
 			}
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_expect_tail_node->rc_.read() > 0, "p_expect_tail_node has zero reference count in push_impl" );
-#endif
 
 			node* p_next_node = p_expect_tail_node->ap_next_.load( /*std::memory_order_acquire*/ );
 			if ( p_next_node == nullptr ) {
 				// 終端ノードのはず。
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-				// デバッグ用コード
-				MY_RUNTIME_ASSERT( p_pushed_new_tail->ap_next_.load() == nullptr, "p_pushed_new_tail has non-null next pointer in push_impl" );
-#endif
 				bool ret = p_expect_tail_node->ap_next_.compare_exchange_strong( p_next_node, p_pushed_new_tail );
 				if ( ret ) {
 					// 終端ノードの後ろへの追加に成功。tailの更新を試みる。
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-					// デバッグ用コード
-					MY_RUNTIME_ASSERT( expect_tail_rc_g.read_count() > 0, "p_expect_tail_node has zero reference count in push_impl" );
-#endif
 					ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_pushed_new_tail );
 					break;   // 更新処理完了、ループを抜ける。なお、更新に失敗しても、他のスレッドが頑張ってくれるから、気にしない。
 				} else {
@@ -902,35 +814,122 @@ private:
 		return;
 	}
 
+	node* try_pop_impl( std::optional<T>& popped_value )
+	{
+		while ( true ) {
+			itl::stickey_counter_try_increment_guard expect_head_rc_g;
+			node*                                    p_expect_head_node = nullptr;
+			while ( true ) {
+				p_expect_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+				expect_head_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_head_node->rc_ );
+				if ( expect_head_rc_g.owns_rc() ) {
+					node* p_chk_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );
+					if ( p_expect_head_node == p_chk_head_node ) {
+						break;
+					}
+					// headノードが変化していたので、再度やり直す。
+				} else {
+					// headノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
+				}
+			}
+
+			itl::stickey_counter_try_increment_guard expect_tail_rc_g;
+			node*                                    p_expect_tail_node                = nullptr;
+			bool                                     is_success_tail_node_rc_increment = false;
+			while ( true ) {
+				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+				expect_tail_rc_g   = itl::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
+				if ( expect_tail_rc_g.owns_rc() ) {
+					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
+					if ( p_expect_tail_node == p_chk_tail_node ) {
+						is_success_tail_node_rc_increment = true;
+						break;
+					}
+					// tailノードが変化していたので、再度やり直す。
+				} else {
+					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
+					break;
+				}
+			}
+			if ( !is_success_tail_node_rc_increment ) {
+				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
+				continue;
+			}
+
+			itl::stickey_counter_try_increment_guard expect_next_rc_g;
+			node*                                    p_expect_next_node                = nullptr;
+			bool                                     is_success_next_node_rc_increment = false;
+			while ( true ) {
+				p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
+				if ( p_expect_next_node == nullptr ) {
+					return nullptr;   // 本当に空っぽだったので、popを終了する。
+				}
+
+				expect_next_rc_g = itl::stickey_counter_try_increment_guard( p_expect_next_node->rc_ );
+				if ( expect_next_rc_g.owns_rc() ) {
+					node* p_chk_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
+					if ( p_expect_next_node == p_chk_next_node ) {
+						is_success_next_node_rc_increment = true;
+						break;
+					}
+					// nextノードが変化していたので、nextノードに対するリファレンスカウンタ取得をやり直す。
+				} else {
+					// nextノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
+					break;
+				}
+			}
+			if ( !is_success_next_node_rc_increment ) {
+				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
+				continue;
+			}
+
+			// ここに到達した時点で、p_expect_head_node, p_expect_tail_node, p_expect_next_nodeはnullptrでないことが保証されている。
+			if ( p_expect_head_node == p_expect_tail_node ) {
+				// queueが空かもしれないが、tailの更新が遅れているだけかもしれない
+				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
+				// tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
+			} else {
+				if ( ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
+					// headが獲得できたので、nextの保存されている値情報を取り出す。
+					// もともとのアルゴリズムでは、このv_の読み出しは、ap_que_head_.compare_exchange_strong()前で行っている。
+					// これは、ABA問題を避けるために先行読み出しを行う必要があったから、そのように実装されている。
+					// しかし、一方でその実装だと、Thread Sanitizerがレースコンディションのエラーを指摘してくる。
+					// Thread Sanitizerの指摘を避けるためには、ABA問題を避けつつ、ap_que_head_.compare_exchange_strong()の後に読み出す必要がある。
+					// これを実現するには、p_expect_next_nodeに対してのABA問題を避けるために、ハザードポインタを用いる方法が基本である。
+					// この実装では、ハザードポインタの代わりにリファレンスカウンタを用いるので、p_expect_next_nodeに対してリファレンスカウンタを
+					// 適用し、p_expect_next_nodeに対してのABA問題を避ける方策を採った。
+					if constexpr ( std::is_move_constructible<T>::value ) {
+						popped_value = std::optional<T>( std::move( p_expect_next_node->v_ ) );
+					} else {
+						popped_value = std::optional<T>( p_expect_next_node->v_ );
+					}
+					p_expect_next_node->destruct_value();   // moveしたので、nodeが保持する値のデストラクトを行う。
+
+					return p_expect_head_node;
+				} else {
+					// headの獲得に失敗したので、最初からやり直す。
+				}
+			}
+		}
+	}
+
 	// 事後条件： 戻り値のnodeのrc_は１で初期化されている
 	static node* allocate_node( void )
 	{
 		node* p_reused = free_node_list_.try_pop();
 		if ( p_reused != nullptr ) {
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_reused->rc_.read() == 0, "p_reused has non-zero reference count" );
-#endif
 			// 再利用可能なノードがあったので、それを返す。
 			p_reused->recycle();
 			return p_reused;
 		}
 		p_reused = tl_retire_node_list_.check_and_pop();
 		if ( p_reused != nullptr ) {
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_reused->rc_.read() == 0, "p_reused has non-zero reference count" );
-#endif
 			// 再利用可能なノードがあったので、それを返す。
 			p_reused->recycle();
 			return p_reused;
 		}
 		p_reused = primary_retired_node_list_.try_check_and_pop();
 		if ( p_reused != nullptr ) {
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-			// デバッグ用コード
-			MY_RUNTIME_ASSERT( p_reused->rc_.read() == 0, "p_reused has non-zero reference count" );
-#endif
 			// 再利用可能なノードがあったので、それを返す。
 			p_reused->recycle();
 			return p_reused;
@@ -949,6 +948,7 @@ private:
 			node_allocator_traits_type::deallocate( node_allocator, p_new, 1 );
 			throw;
 		}
+
 		return p_new;
 	}
 
@@ -967,12 +967,14 @@ private:
 		}
 
 		node* p_fc_node = nullptr;
-		if ( p->rc_.read() != 0 ) {
-			// まだ参照しているスレッドがいるので、スレッドローカルなretireリストに回す。
+		bool  dec_ret   = p->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()で初期値として割り当てられているカウンタ１を相殺するためのもの。
+		if ( dec_ret ) {
+			// pはだれも参照していないので、そのままフリーノードリストへの登録に回す。
+			p_fc_node = p;
+		} else {
+			// pはまだ参照しているスレッドがいるので、スレッドローカルなretireリストに回す。
 			p_fc_node = tl_retire_node_list_.check_and_pop();
 			tl_retire_node_list_.push_back( p );
-		} else {
-			p_fc_node = p;
 		}
 		if ( p_fc_node == nullptr ) {
 			return;
@@ -1006,10 +1008,9 @@ private:
 	std::atomic<node*> ap_que_head_;
 	std::atomic<node*> ap_que_tail_;
 
-	static mutex_retired_node_list                             primary_retired_node_list_;     //!< primary retired elements list
-	static mutex_free_node_list                                free_node_list_;                //!< mutex-free list to hold free nodes
-	static thread_local retired_node_list                      tl_retire_node_list_;           //!< thread-local variable to hold retired mgr_info_type elements
-	static thread_local thread_local_retired_node_list_cleaner tl_retire_node_list_cleaner_;   //!< thread-local cleaner for retired elements list
+	static mutex_retired_node_list           primary_retired_node_list_;   //!< primary retired elements list
+	static mutex_free_node_list              free_node_list_;              //!< mutex-free list to hold free nodes
+	static thread_local tl_retired_node_list tl_retire_node_list_;         //!< thread-local variable to hold retired mgr_info_type elements
 };
 
 template <typename T, typename Alloc>
@@ -1017,9 +1018,7 @@ constinit rc_lf_queue<T, Alloc>::mutex_retired_node_list rc_lf_queue<T, Alloc>::
 template <typename T, typename Alloc>
 constinit rc_lf_queue<T, Alloc>::mutex_free_node_list rc_lf_queue<T, Alloc>::free_node_list_;   //!< mutex-free list to hold free nodes
 template <typename T, typename Alloc>
-constinit thread_local rc_lf_queue<T, Alloc>::retired_node_list rc_lf_queue<T, Alloc>::tl_retire_node_list_;   //!< thread-local variable to hold retired mgr_info_type elements
-template <typename T, typename Alloc>
-constinit thread_local rc_lf_queue<T, Alloc>::thread_local_retired_node_list_cleaner rc_lf_queue<T, Alloc>::tl_retire_node_list_cleaner_;   //!< thread-local cleaner for retired elements list
+constinit thread_local rc_lf_queue<T, Alloc>::tl_retired_node_list rc_lf_queue<T, Alloc>::tl_retire_node_list_;   //!< thread-local variable to hold retired mgr_info_type elements
 
 }   // namespace yan2
 

@@ -147,7 +147,7 @@ struct basic_sticky_counter {
 				return 0;
 			}
 		}
-		return ( ( val & is_zero_ ) != 0 ) ? 0 : val;
+		return ( ( val & is_zero_ ) != 0 ) ? 0 : ( val & ~( is_zero_ | helped_ ) );
 	}
 
 	/**
