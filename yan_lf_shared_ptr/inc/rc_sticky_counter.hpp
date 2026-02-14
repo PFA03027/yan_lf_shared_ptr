@@ -196,6 +196,7 @@ private:
 
 using sticky_counter = basic_sticky_counter<uint64_t>;
 
+template <typename T = uint64_t>
 struct stickey_counter_try_increment_guard {
 	~stickey_counter_try_increment_guard( void ) noexcept
 	{
@@ -228,7 +229,7 @@ struct stickey_counter_try_increment_guard {
 		return *this;
 	}
 
-	explicit stickey_counter_try_increment_guard( rc::sticky_counter& rc_arg ) noexcept
+	explicit stickey_counter_try_increment_guard( rc::basic_sticky_counter<T>& rc_arg ) noexcept
 	  : p_rc_( nullptr )
 	{
 		bool is_success = rc_arg.increment_if_not_zero();
@@ -258,8 +259,13 @@ struct stickey_counter_try_increment_guard {
 	}
 
 private:
-	rc::sticky_counter* p_rc_;
+	rc::basic_sticky_counter<T>* p_rc_;
 };
+
+#if __cpp_deduction_guides >= 201606
+template <typename T>
+stickey_counter_try_increment_guard( rc::basic_sticky_counter<T>& ) -> stickey_counter_try_increment_guard<T>;
+#endif
 
 }   // namespace rc
 
