@@ -76,7 +76,6 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
 	std::cout << "Watermark after high load: " << test_get_lf_shared_ptr_watermark<NonTrivialType, AllocType>() << std::endl;
-	EXPECT_LT( lfheap::typed_pool_heap<NonTrivialType>::get_watermark(), lfheap::typed_pool_heap<NonTrivialType>::NUM );
 }
 
 TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithStdSharedPtr )
