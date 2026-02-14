@@ -1,0 +1,103 @@
+@startuml
+
+title class diagram
+
+class T {}
+
+namespace rc {
+class basic_sticky_counter<unsigned integral> {
+  --
+  + bool increment_if_not_zero()
+  + bool decrement_then_is_zero()
+  + rc_type read()
+  + bool is_sticky_zero()
+  + {static} rc_type max()
+}
+
+
+class sticky_counter_guard<sticky counter> {
+  --
+  + swap() : void
+  + decrement_then_is_zero(): bool
+  + owns_count(): bool
+}
+
+sticky_counter_guard ..> basic_sticky_counter
+
+class counter_guard<integral atomic variable> {
+  --
+  + swap() : void
+}
+
+}
+
+namespace yan2 {
+namespace itl {
+
+abstract lf_shared_value_carrier_base {
+  + rc::sticky_counter carrier_rc_;
+  + rc::sticky_counter value_rc_;
+  --
+  + void destruct_value(); 
+  + void discard_self();
+}
+note left of lf_shared_value_carrier_base::carrier_rc_
+  carrier自身の寿命管理用reference counter
+end note
+note left of lf_shared_value_carrier_base::value_rc_
+  v_の有効性管理用reference counter
+end note
+
+basic_sticky_counter *-- lf_shared_value_carrier_base::carrier_rc_
+basic_sticky_counter *-- lf_shared_value_carrier_base::value_rc_
+
+
+class lf_shared_value_carrier_impl_in_place<T, Alloc> {
+  + Alloc allocator_;
+  + T v_;
+  --
+  + void destruct_value(); 
+  + void discard_self();
+  + {static} lf_shared_value_carrier_impl_in_place* create_my_class_carrier( Alloc a, Args&&... args );
+    - {static} void discard_my_class_carrier( lf_shared_value_carrier_impl_in_place* p_discard_target ) noexcept;
+}
+T *-- lf_shared_value_carrier_impl_in_place::v_
+
+class lf_shared_value_carrier_impl_pointer_with_deleter<T, Deleter, Alloc> {
+  + Alloc        allocator_;
+  + value_type*  p_value_;
+  + deleter_type deleter_;
+  --
+  + void destruct_value(); 
+  + void discard_self();
+  + {static} lf_shared_value_carrier_impl_pointer_with_deleter* create_my_class_carrier( Alloc a, Args&&... args );
+    - {static} void discard_my_class_carrier( lf_shared_value_carrier_impl_pointer_with_deleter* p_discard_target ) noexcept;
+}
+T o-- lf_shared_value_carrier_impl_pointer_with_deleter::p_value_
+
+lf_shared_value_carrier_base <|-- lf_shared_value_carrier_impl_in_place
+lf_shared_value_carrier_base <|-- lf_shared_value_carrier_impl_pointer_with_deleter
+
+}
+
+class lf_shared_ptr<T> {
+  + using element_type = T;
+    - itl::lf_shared_value_carrier_base*           p_carrier_;
+  - rc::sticky_counter_guard<rc::sticky_counter> carrier_rc_guard_;
+  - rc::sticky_counter_guard<rc::sticky_counter> value_rc_guard_;
+  - T*                                           p_elem_;
+  --
+  + void swap( lf_shared_ptr& other ) noexcept;
+  + T* get() noexcept;
+  + const T* get() const noexcept;
+  + void reset();
+}
+lf_shared_value_carrier_base *-- lf_shared_ptr::p_carrier_
+lf_shared_value_carrier_base::carrier_rc_ <-- lf_shared_ptr::carrier_rc_guard_
+lf_shared_value_carrier_base::value_rc_ <-- lf_shared_ptr::value_rc_guard_
+T <-- lf_shared_ptr::p_elem_
+
+}
+
+
+@enduml

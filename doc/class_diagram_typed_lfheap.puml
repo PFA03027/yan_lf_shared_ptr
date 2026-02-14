@@ -1,0 +1,88 @@
+@startuml
+
+title class diagram
+
+class T {}
+
+namespace std {
+class bad_alloc {
+  --
+  + const char* what( void ) const noexcept;
+}
+}
+
+namespace lfheap2 {
+
+namespace itl {
+
+class heap_element<T> {
+  + T* v_;
+  --
+}
+
+class heap_element_mgrinfo<T> {
+  + std::atomic<size_t>                rc_;
+  + std::atomic<heap_element_mgrinfo*> ap_free_stack_next_;
+  + heap_element_mgrinfo*              p_retire_keep_next_;
+  --
+
+}
+note left of heap_element_mgrinfo::rc_
+  heap_element_mgrinfoを参照中を示すreference counter
+end note
+note left of heap_element_mgrinfo::ap_free_stack_next_
+  freeリスト用に使われるnextポインタ
+end note
+note left of heap_element_mgrinfo::p_retire_keep_next_
+  retire内で一時的に保持するリスト用のnextポインタ
+end note
+
+
+}
+
+class typed_pool_bad_alloc {
+  --
+  + const char* what( void ) const noexcept
+}
+bad_alloc <|-- typed_pool_bad_alloc
+
+class typed_pool_heap<T> {
+  + using value_type                             = T;
+  + using propagate_on_container_move_assignment = std::true_type;
+  + using size_type                              = size_t;
+  + using difference_type                        = ptrdiff_t;
+  + {static} constexpr size_t NUM = ELEMNUM;
+
+  - {static} std::array<mgr_info_type, NUM>                      array_mgr_info_;
+  - {static} std::array<element_type, NUM>                       array_heap_;
+  - {static} std::atomic<index_t>                                watermark_of_array_;
+  - {static} std::atomic<mgr_info_type*>                         ap_free_mgrinfo_head_;
+  - {static} mutex_retired_fifo_list                             primary_retired_mgrinfo_list_;
+  - {static} thread_local retired_fifo_list                      retired_mgrinfo_list_;
+  - {static} thread_local thread_local_retired_fifo_list_cleaner tl_retired_fifo_list_cleaner_;
+  --
+  + value_type* allocate( size_type n )
+  + void deallocate( value_type* p, size_type n )
+  + {static} size_t get_watermark( void )
+  + {static} void debug_destruction_and_regeneration( void );
+}
+
+class retired_fifo_list
+class mutex_retired_fifo_list
+class thread_local_retired_fifo_list_cleaner
+
+retired_fifo_list *-- mutex_retired_fifo_list
+
+typed_pool_heap +-- retired_fifo_list
+typed_pool_heap +-- mutex_retired_fifo_list
+typed_pool_heap +-- thread_local_retired_fifo_list_cleaner
+
+heap_element_mgrinfo *-- "NUM" typed_pool_heap::array_mgr_info_
+heap_element *-- "NUM" typed_pool_heap::array_heap_
+T <-- typed_pool_heap::value_type
+
+typed_pool_bad_alloc o-- typed_pool_heap
+
+}
+
+@enduml
