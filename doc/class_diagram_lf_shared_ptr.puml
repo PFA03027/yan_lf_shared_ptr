@@ -15,19 +15,13 @@ class basic_sticky_counter<unsigned integral> {
 }
 
 
-class sticky_counter_guard<sticky counter> {
+class stickey_counter_try_increment_guard<unsigned integral> {
   --
-  + swap() : void
-  + decrement_then_is_zero(): bool
-  + owns_count(): bool
+  + owns_rc(): bool
 }
 
 sticky_counter_guard ..> basic_sticky_counter
 
-class counter_guard<integral atomic variable> {
-  --
-  + swap() : void
-}
 
 }
 

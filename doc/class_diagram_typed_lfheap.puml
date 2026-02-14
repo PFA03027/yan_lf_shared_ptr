@@ -11,7 +11,7 @@ class bad_alloc {
 }
 }
 
-namespace lfheap2 {
+namespace lfheap {
 
 namespace itl {
 
