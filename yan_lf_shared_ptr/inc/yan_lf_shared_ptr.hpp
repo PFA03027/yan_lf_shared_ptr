@@ -19,7 +19,7 @@
 #include "rc_sticky_counter.hpp"
 #include "typed_lfheap.hpp"
 
-namespace yan2 {   // yet another
+namespace yan {   // yet another
 namespace itl {
 
 struct lf_shared_value_carrier_base {
@@ -426,6 +426,6 @@ lf_shared_ptr<T> allocate_lf_shared( Alloc alloc, Args&&... args )
 	return lf_shared_ptr<T>( tag, p_impl_carrier, p_value );
 }
 
-}   // namespace yan2
+}   // namespace yan
 
 #endif   // YAN_LF_SHARED_PTR_HPP_

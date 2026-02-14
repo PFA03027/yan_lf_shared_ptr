@@ -31,7 +31,7 @@ class counter_guard<integral atomic variable> {
 
 }
 
-namespace yan2 {
+namespace yan {
 namespace itl {
 
 abstract lf_shared_value_carrier_base {

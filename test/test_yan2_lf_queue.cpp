@@ -31,7 +31,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanDefaultConstruct )
 	// Arrange
 
 	// Act
-	yan2::itl::stickey_counter_try_increment_guard sut;
+	yan::itl::stickey_counter_try_increment_guard sut;
 
 	// Assert
 	EXPECT_FALSE( sut.owns_rc() );
@@ -44,7 +44,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanConstructWithRc )
 	EXPECT_EQ( rc.read(), 1 );
 
 	// Act
-	yan2::itl::stickey_counter_try_increment_guard sut( rc );
+	yan::itl::stickey_counter_try_increment_guard sut( rc );
 
 	// Assert
 	EXPECT_EQ( rc.read(), 2 );
@@ -59,7 +59,7 @@ TEST( TestYanRcLfQueueCounterGuard, CanDestruct_Then_RcIsDecremented )
 
 	{
 		// Act
-		yan2::itl::stickey_counter_try_increment_guard sut( rc );
+		yan::itl::stickey_counter_try_increment_guard sut( rc );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );
@@ -76,12 +76,12 @@ TEST( TestYanRcLfQueueCounterGuard, CanMoveConstruct )
 	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan2::itl::stickey_counter_try_increment_guard sut1( rc );
+		yan::itl::stickey_counter_try_increment_guard sut1( rc );
 		EXPECT_EQ( rc.read(), 2 );
 		EXPECT_TRUE( sut1.owns_rc() );
 
 		// Act
-		yan2::itl::stickey_counter_try_increment_guard sut2( std::move( sut1 ) );
+		yan::itl::stickey_counter_try_increment_guard sut2( std::move( sut1 ) );
 
 		// Assert
 		EXPECT_EQ( rc.read(), 2 );
@@ -99,8 +99,8 @@ TEST( TestYanRcLfQueueCounterGuard, CanMoveAssignment )
 	EXPECT_EQ( rc.read(), 1 );
 
 	{
-		yan2::itl::stickey_counter_try_increment_guard sut1( rc );
-		yan2::itl::stickey_counter_try_increment_guard sut2( rc );
+		yan::itl::stickey_counter_try_increment_guard sut1( rc );
+		yan::itl::stickey_counter_try_increment_guard sut2( rc );
 		EXPECT_EQ( rc.read(), 3 );
 
 		// Act
@@ -122,7 +122,7 @@ TEST( TestYanRcLfQueue, CanDefaultConstruct )
 	// Arrange
 
 	// Act
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	// Assert
 }
@@ -130,7 +130,7 @@ TEST( TestYanRcLfQueue, CanDefaultConstruct )
 TEST( TestYanRcLfQueue, Empty_CanPush )
 {
 	// Arrange
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	// Act
 	sut.push( NonTrivialType( 41 ) );
@@ -141,7 +141,7 @@ TEST( TestYanRcLfQueue, Empty_CanPush )
 TEST( TestYanRcLfQueue, Empty_CanPop )
 {
 	// Arrange
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	// Act
 	auto opt_ret = sut.try_pop();
@@ -153,7 +153,7 @@ TEST( TestYanRcLfQueue, Empty_CanPop )
 TEST( TestYanRcLfQueue, Empty_CanPushPop )
 {
 	// Arrange
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType> sut;
 	sut.push( NonTrivialType( 41 ) );
 
 	// Act
@@ -167,7 +167,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPop )
 TEST( TestYanRcLfQueue, Empty_CanPushPushPopPop )
 {
 	// Arrange
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType> sut;
 	sut.push( NonTrivialType( 41 ) );
 	sut.push( NonTrivialType( 43 ) );
 
@@ -188,8 +188,8 @@ TEST( TestYanRcLfQueue, Empty_CanPushPushHighload )
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
-	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 10;
 	std::atomic<bool> done { false };
@@ -240,7 +240,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPushHighload )
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
 
 	// Cleanup
-	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	size_t deallocated_count = yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 
@@ -252,8 +252,8 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
-	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 10;
 	std::atomic<bool> done { false };
@@ -309,7 +309,7 @@ TEST( TestYanRcLfQueue, Empty_CanPopPopHighload )
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
 
 	// Cleanup
-	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	size_t deallocated_count = yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 
@@ -321,8 +321,8 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 	// Arrange
 	// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 	// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果の一つです。
-	yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
-	yan2::rc_lf_queue<NonTrivialType> sut;
+	yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	yan::rc_lf_queue<NonTrivialType> sut;
 
 	constexpr size_t  NUM_THREADS = 8;
 	std::atomic<bool> done { false };
@@ -383,7 +383,7 @@ TEST( TestYanRcLfQueue, Empty_CanPushPopHighload )
 	EXPECT_FALSE( opt_ret.has_value() );   // 最終的にキューが空であることを確認する
 
 	// // Cleanup
-	size_t deallocated_count = yan2::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
+	size_t deallocated_count = yan::rc_lf_queue<NonTrivialType>::deallocate_all_free_nodes();
 	std::cout << "Total nodes deallocated in free: " << deallocated_count << std::endl;
 }
 

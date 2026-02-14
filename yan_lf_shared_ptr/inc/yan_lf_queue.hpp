@@ -39,7 +39,7 @@ inline void my_runtime_assert_impl( bool expr, std::string expr_str, const char*
 #include "typed_lfheap.hpp"
 #include "yan_lf_shared_ptr.hpp"
 
-namespace yan2 {   // yet another
+namespace yan {   // yet another
 
 namespace itl {
 struct stickey_counter_try_increment_guard {
@@ -760,6 +760,6 @@ constinit rc_lf_queue<T, Alloc>::mutex_free_node_list rc_lf_queue<T, Alloc>::fre
 template <typename T, typename Alloc>
 constinit thread_local rc_lf_queue<T, Alloc>::tl_retired_node_list rc_lf_queue<T, Alloc>::tl_retire_node_list_;   //!< thread-local variable to hold retired mgr_info_type elements
 
-}   // namespace yan2
+}   // namespace yan
 
 #endif

@@ -20,7 +20,7 @@ TEST( YanLFSharedPtr, CanConstructDestruct )
 	// Arrange
 
 	// Act
-	yan2::lf_shared_ptr<int> sut;
+	yan::lf_shared_ptr<int> sut;
 
 	// Assert
 	EXPECT_FALSE( sut );
@@ -31,7 +31,7 @@ TEST( YanLFSharedPtr, CanMakeLimitedLfSharedPtrWithTrivialType_ThenReturnValidPo
 	// Arrange
 
 	// Act
-	auto sp_sut = yan2::make_lf_shared<int>( 42 );
+	auto sp_sut = yan::make_lf_shared<int>( 42 );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
@@ -43,7 +43,7 @@ TEST( YanLFSharedPtr, CanMakeLimitedLfSharedPtrWithNonTrivialType_ThenReturnVali
 	// Arrange
 
 	// Act
-	auto sp_sut = yan2::make_lf_shared<NonTrivialType>( 42U );
+	auto sp_sut = yan::make_lf_shared<NonTrivialType>( 42U );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
@@ -54,11 +54,11 @@ TEST( YanLFSharedPtr, CanMakeLimitedLfSharedPtr_ThenReturnValidPointer )
 {
 	// Arrange
 	{
-		auto sp_dummy = yan2::make_lf_shared<int>( 41 );
+		auto sp_dummy = yan::make_lf_shared<int>( 41 );
 	}
 
 	// Act
-	auto sp_sut = yan2::make_lf_shared<int>( 42 );
+	auto sp_sut = yan::make_lf_shared<int>( 42 );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
@@ -72,7 +72,7 @@ TEST( YanLFSharedPtrWithStdAlloc, CanAllocateShared )
 	AllocType alloc;
 
 	// Act
-	auto sp_sut = yan2::allocate_lf_shared<NonTrivialType>( alloc, 42U );
+	auto sp_sut = yan::allocate_lf_shared<NonTrivialType>( alloc, 42U );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );
@@ -88,7 +88,7 @@ TEST( YanLFSharedPtrWithStdAlloc, CanConstruct )
 	AllocType alloc;
 
 	// Act
-	yan2::lf_shared_ptr<NonTrivialType> sp_sut( new NonTrivialType( 42U ), deleter, alloc );
+	yan::lf_shared_ptr<NonTrivialType> sp_sut( new NonTrivialType( 42U ), deleter, alloc );
 
 	// Assert
 	EXPECT_TRUE( sp_sut );

@@ -26,7 +26,7 @@ constexpr size_t NUM_THREADS = 10;
 template <typename T, typename Alloc>
 size_t test_get_lf_shared_ptr_watermark( void ) noexcept
 {
-	using carrier_impl_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<yan2::itl::lf_shared_value_carrier_impl_in_place<T, Alloc>>;
+	using carrier_impl_allocator_type = typename std::allocator_traits<Alloc>::template rebind_alloc<yan::itl::lf_shared_value_carrier_impl_in_place<T, Alloc>>;
 	return carrier_impl_allocator_type::get_watermark();
 }
 
@@ -46,7 +46,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanHandleHighLoad )
 			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
-				auto sp_elem = yan2::allocate_lf_shared<NonTrivialType>( alloc, 42U );   // Create shared pointer with value 42
+				auto sp_elem = yan::allocate_lf_shared<NonTrivialType>( alloc, 42U );   // Create shared pointer with value 42
 				// NoTrivialTypeは非トリビアルな型なので、メモリリークを防ぐために適切に破棄される必要があります。
 				// 不具合があれば、ここでメモリリークが発生します。そのメモリリークをLeakサニタイザーで検出するのが、このテストの効果です。
 				count++;
@@ -132,7 +132,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
-				auto sp_elem = yan2::make_lf_shared<uint32_t>( 42U );   // Create shared pointer with value 42
+				auto sp_elem = yan::make_lf_shared<uint32_t>( 42U );   // Create shared pointer with value 42
 				count++;
 			}
 			return count;
@@ -177,7 +177,7 @@ TEST( YanLFSharedPtrWithTypedPoolHeapHighLoad, CanComparePerformanceWithRcShared
 			start_latch.arrive_and_wait();
 			size_t count = 0;
 			while ( !done.load() ) {
-				auto sp_elem = yan2::allocate_lf_shared<uint32_t>( alloc, 42U );   // Create shared pointer with value 42
+				auto sp_elem = yan::allocate_lf_shared<uint32_t>( alloc, 42U );   // Create shared pointer with value 42
 				count++;
 			}
 			return count;
