@@ -17,22 +17,6 @@
 #include <optional>
 #include <stdexcept>
 #include <type_traits>
-#ifdef YAN_LF_QUEUE_DEBUG_CODE
-#include <iostream>
-#include <string>
-
-inline void my_runtime_assert_impl( bool expr, std::string expr_str, const char* file, int line )
-{
-	if ( !expr ) {
-		std::string full_expr_str = std::string( "Assertion failed: " ) + expr_str + ", file " + file + ", line " + std::to_string( line );
-		throw std::logic_error( full_expr_str );
-	}
-}
-#define MY_RUNTIME_ASSERT( EXPR, ASSERT_STR ) my_runtime_assert_impl( EXPR, ASSERT_STR, __FILE__, __LINE__ )
-
-#else
-#define MY_RUNTIME_ASSERT( EXPR, ASSERT_STR ) ( (void)0 )
-#endif
 
 #include "rc_sticky_counter.hpp"
 
