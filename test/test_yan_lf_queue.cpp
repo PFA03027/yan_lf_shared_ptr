@@ -216,7 +216,7 @@ TEST_F( TestYanRcLfQueueHighload, Empty_CanPushPushHighload )
 	for ( size_t i = 0; i < NUM_THREADS; ++i ) {
 		std::packaged_task<size_t()> task( [i, &done, &sut, &start_latch]() {
 			size_t loop_count = 0;
-			std::cout << "Thread " << i << " started processing." << std::endl;
+			// std::cout << "Thread " << i << " started processing." << std::endl;
 			start_latch.arrive_and_wait();   // すべてのスレッドが準備完了するまで待機する
 			while ( !done.load() ) {
 				sut.push( NonTrivialType( loop_count ) );
@@ -280,7 +280,7 @@ TEST_F( TestYanRcLfQueueHighload, Empty_CanPopPopHighload )
 		std::packaged_task<size_t()> task( [i, &done, &sut, &start_latch]() {
 			bool   loop_flag  = true;
 			size_t loop_count = 0;
-			std::cout << "Thread " << i << " started processing." << std::endl;
+			// std::cout << "Thread " << i << " started processing." << std::endl;
 			start_latch.arrive_and_wait();   // すべてのスレッドが準備完了するまで待機する
 			do {
 				loop_count++;
@@ -339,7 +339,7 @@ TEST_F( TestYanRcLfQueueHighload, Empty_CanPushPopHighload )
 		std::packaged_task<std::pair<size_t, size_t>()> task( [i, &done, &sut, &start_latch]() {
 			size_t count      = 0;
 			size_t loop_count = 0;
-			std::cout << "Thread " << i << " started processing." << std::endl;
+			// std::cout << "Thread " << i << " started processing." << std::endl;
 			start_latch.arrive_and_wait();   // すべてのスレッドが準備完了するまで待機する
 			while ( !done.load() ) {
 				sut.push( NonTrivialType( count ) );
@@ -352,7 +352,7 @@ TEST_F( TestYanRcLfQueueHighload, Empty_CanPushPopHighload )
 				count = opt_ret->get_value() + 1;
 			}
 
-			std::cout << "Thread " << i << " finished processing " << count << " elements." << std::endl;
+			// std::cout << "Thread " << i << " finished processing " << count << " elements." << std::endl;
 			return std::make_pair( count, loop_count );
 		} );   // 非同期実行する関数を登録する
 		results.emplace_back( task.get_future() );
@@ -379,7 +379,7 @@ TEST_F( TestYanRcLfQueueHighload, Empty_CanPushPopHighload )
 		EXPECT_GT( ret_count, 0 );   // 各スレッドが少なくとも1つの要素を処理したことを確認する
 		total_count += ret_count;
 		total_loop_count += ret_loop_count;
-		std::cout << "Thread finished processing " << ret_count << " elements." << std::endl;
+		// std::cout << "Thread finished processing " << ret_count << " elements." << std::endl;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
 	std::cout << "Total loop count: " << total_loop_count << std::endl;
