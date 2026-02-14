@@ -25,7 +25,7 @@
 
 // ========================================================================
 
-namespace lfheap2 {
+namespace lfheap {
 
 namespace itl {
 
@@ -554,6 +554,6 @@ struct deleter_via_typed_pool_heap {
 	}
 };
 
-}   // namespace lfheap2
+}   // namespace lfheap
 
 #endif   // LF_TYPED_HEAP_HPP_

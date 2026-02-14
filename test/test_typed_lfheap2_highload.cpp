@@ -23,11 +23,11 @@
 TEST( TypedPoolHeapHighLoad, CanHandleHighLoad )
 {
 	// Arrange
-	using target_pointer                      = std::allocator_traits<lfheap2::typed_pool_heap<int>>::pointer;
+	using target_pointer                      = std::allocator_traits<lfheap::typed_pool_heap<int>>::pointer;
 	constexpr size_t              NUM_THREADS = 20;
 	std::atomic<bool>             done { false };
 	std::atomic<target_pointer>   duplicate_bug_check { nullptr };
-	lfheap2::typed_pool_heap<int> sut_allocator;
+	lfheap::typed_pool_heap<int> sut_allocator;
 
 	// Act
 	std::vector<std::thread>         threads;
@@ -83,6 +83,6 @@ TEST( TypedPoolHeapHighLoad, CanHandleHighLoad )
 		total_count += ret_count;
 	}
 	std::cout << "Total elements processed: " << total_count << std::endl;
-	std::cout << "Watermark after high load: " << lfheap2::typed_pool_heap<int>::get_watermark() << std::endl;
-	EXPECT_LT( lfheap2::typed_pool_heap<int>::get_watermark(), lfheap2::typed_pool_heap<int>::NUM );
+	std::cout << "Watermark after high load: " << lfheap::typed_pool_heap<int>::get_watermark() << std::endl;
+	EXPECT_LT( lfheap::typed_pool_heap<int>::get_watermark(), lfheap::typed_pool_heap<int>::NUM );
 }
