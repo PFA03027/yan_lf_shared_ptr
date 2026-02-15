@@ -104,9 +104,9 @@ public:
 
 private:
 	struct node {
-		rc::sticky_counter rc_;                 // このノードを参照しているスレッド数を示すreference counter
-		std::atomic<node*> ap_next_;            // 次のノードへのポインタ
-		node*              p_next_in_retire_;   // retire内での次のノードへのポインタ
+		rc::basic_sticky_counter<uint64_t, true> rc_;                 // このノードを参照しているスレッド数を示すreference counter
+		std::atomic<node*>                       ap_next_;            // 次のノードへのポインタ
+		node*                                    p_next_in_retire_;   // retire内での次のノードへのポインタ
 
 		union {
 			T       v_;
