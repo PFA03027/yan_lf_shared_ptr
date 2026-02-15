@@ -439,37 +439,31 @@ private:
 	void push_impl( node* p_pushed_new_tail )
 	{
 		while ( true ) {
-			rc::stickey_counter_try_increment_guard expect_tail_rc_g;
-			node*                                   p_expect_tail_node = nullptr;
-			while ( true ) {
-				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_tail_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
-				if ( expect_tail_rc_g.owns_rc() ) {
-					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_tail_node == p_chk_tail_node ) {
-						break;
-					}
-					// tailノードが変化していたので、再度やり直す。
-				} else {
-					// tailノードの参照カウンタが０に到達済みなので、すでに、pop済みで他のスレッドが解放処理中かもしれない。最初からやり直す。
-				}
+			node*                                   p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			rc::stickey_counter_try_increment_guard expect_tail_rc_g( p_expect_tail_node->rc_ );
+			if ( !expect_tail_rc_g.owns_rc() ) {
+				continue;   // tailノードの参照カウンタが０に到達済みなので、すでに、pop済みで他のスレッドが解放処理中かもしれない。最初からやり直す。
+			}
+			if ( p_expect_tail_node != ap_que_tail_.load( /*std::memory_order_acquire*/ ) ) {
+				continue;   // tailノードが変化していたので、再度やり直す。
 			}
 
 			node* p_next_node = p_expect_tail_node->ap_next_.load( /*std::memory_order_acquire*/ );
-			if ( p_next_node == nullptr ) {
-				// 終端ノードのはず。
-				bool ret = p_expect_tail_node->ap_next_.compare_exchange_strong( p_next_node, p_pushed_new_tail );
-				if ( ret ) {
-					// 終端ノードの後ろへの追加に成功。tailの更新を試みる。
-					ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_pushed_new_tail );
-					break;   // 更新処理完了、ループを抜ける。なお、更新に失敗しても、他のスレッドが頑張ってくれるから、気にしない。
-				} else {
-					// 終端ノードへの追加に失敗したので、最初からやり直す。
-				}
-			} else {
+			if ( p_next_node != nullptr ) {
 				// p_expect_tail_nodeが終端ノードを指していなかったので、tailを更新してから、最初からやり直す
 				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_next_node );
+				continue;
 			}
+
+			// 終端ノードのはず。終端ノードへの追加を試みる
+			bool ret = p_expect_tail_node->ap_next_.compare_exchange_strong( p_next_node, p_pushed_new_tail );
+			if ( !ret ) {
+				continue;   // 終端ノードへの追加に失敗したので、最初からやり直す。
+			}
+
+			// 終端ノードの後ろへの追加に成功。tailの更新を試みる。
+			ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_pushed_new_tail );
+			break;   // 更新処理完了、ループを抜ける。なお、更新に失敗しても、他のスレッドが頑張ってくれるから、気にしない。
 		}
 
 		return;
