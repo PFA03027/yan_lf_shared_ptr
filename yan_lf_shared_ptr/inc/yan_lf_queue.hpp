@@ -251,6 +251,8 @@ private:
 			}
 
 #if 1
+			// リファレンスカウンタ値がゼロに到達したことをチェックするのに、is_sticky_zero()を使うこちらのコードは、
+			// ABA問題が生じない。。。
 			if ( p_poped->rc_.is_sticky_zero() ) {
 				return p_poped;
 			}
@@ -259,13 +261,15 @@ private:
 			ndl_.push_back( p_poped );
 			return nullptr;
 #else
-			if ( p_poped->rc_.read() != 0 ) {
-				// まだ参照しているスレッドがいるので、取り出せない。再度すぐにチェックするのは無駄なので、FIFOキューの後ろに回す。
-				ndl_.push_back( p_poped );
-				return nullptr;
+			// リファレンスカウンタ値がゼロに到達したことをチェックするのに、read()を使うこちらのコードは、
+			// なぜかABA問題が発生する。。。
+			if ( p_poped->rc_.read() == 0 ) {
+				return p_poped;
 			}
 
-			return p_poped;
+			// まだ参照しているスレッドがいるので、取り出せない。再度すぐにチェックするのは無駄なので、FIFOキューの後ろに回す。
+			ndl_.push_back( p_poped );
+			return nullptr;
 #endif
 		}
 
@@ -612,7 +616,7 @@ private:
 	// 事前条件： p->v_はdestruct_value()されていること。
 	// Precondition: p->v_ has been destructed by destruct_value().
 	// フリーノードリストか、リタイアドノードリストに登録する。
-	// また、ここでは、ノード自身のdeallocateは行わない。これは、個々のリファレンスカウンタが参照できる状態を保つためである。
+	// また、ここでは、ノード自身のdeallocateは行わない。これは、個々のリファレンスカウンタをいつでも参照できる状態に保つためである。
 	// グローバルに管理されているリタイアドノードリストやフリーノードリストからノードをdeallocate_node()する操作は、別途行う。
 	// Register to free node list or retired node list.
 	// Also, do not deallocate the node itself here. This is to keep the state where each reference counter can be referenced.
