@@ -198,6 +198,22 @@ protected:
 	}
 };
 
+TEST_F( TestYanRcLfQueueHighload, CanSweepGarbageNodes )
+{
+	// Arrange
+	yan::rc_lf_queue<NonTrivialType> sut;
+	sut.push( NonTrivialType( 41 ) );
+	auto opt_ret1 = sut.try_pop();
+	ASSERT_TRUE( opt_ret1.has_value() );
+	EXPECT_EQ( opt_ret1->get_value(), 41 );
+
+	// Act
+	auto ret = yan::rc_lf_queue<NonTrivialType>::sweep_garbage_nodes();
+
+	// Assert
+	EXPECT_EQ( ret, 1 );
+}
+
 #if 1
 TEST_F( TestYanRcLfQueueHighload, Empty_CanPushPushHighload )
 {

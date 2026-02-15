@@ -93,6 +93,15 @@ public:
 		return ans;
 	}
 
+	// フリーノードリスト内のノードを破棄する。
+	// これにより、未使用のノードを削減することが出来る。
+	static size_t sweep_garbage_nodes( void ) noexcept
+	{
+		mutex_free_node_list empty;
+		free_node_list_.swap( empty );
+		return empty.deallocate_all();
+	}
+
 	// 値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのフリーノードを開放する。
 	static size_t deallocate_all_free_nodes( void ) noexcept
 	{
@@ -205,6 +214,17 @@ private:
 			other.p_head_ = other.p_tail_ = nullptr;   // Clear the other list after merging
 		}
 
+		void swap( node_list& other )
+		{
+			node* p_tmp   = p_head_;
+			p_head_       = other.p_head_;
+			other.p_head_ = p_tmp;
+
+			p_tmp         = p_tail_;
+			p_tail_       = other.p_tail_;
+			other.p_tail_ = p_tmp;
+		}
+
 		// すべてのノードで、値のdestruct_value()が行われていること、およびすべてのスレッドが参照しないことを前提として、すべてのノードを開放する。
 		size_t deallocate_all( void ) noexcept
 		{
@@ -230,6 +250,11 @@ private:
 		constexpr retired_node_list( void )
 		  : ndl_()
 		{
+		}
+
+		void swap( retired_node_list& other )
+		{
+			ndl_.swap( other.ndl_ );
 		}
 
 		void push_back( node* p_node ) noexcept
@@ -395,6 +420,12 @@ private:
 		}
 
 		constexpr mutex_free_node_list( void ) = default;
+
+		void swap( mutex_free_node_list& other )
+		{
+			std::scoped_lock sl( mtx_, other.mtx_ );
+			ndl_.swap( other.ndl_ );
+		}
 
 		void push_front( node* p_node ) noexcept
 		{
