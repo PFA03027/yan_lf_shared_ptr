@@ -472,99 +472,61 @@ private:
 	node* try_pop_impl( std::optional<T>& popped_value )
 	{
 		while ( true ) {
-			rc::stickey_counter_try_increment_guard expect_head_rc_g;
-			node*                                   p_expect_head_node = nullptr;
-			while ( true ) {
-				p_expect_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_head_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_head_node->rc_ );
-				if ( expect_head_rc_g.owns_rc() ) {
-					node* p_chk_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_head_node == p_chk_head_node ) {
-						break;
-					}
-					// headノードが変化していたので、再度やり直す。
-				} else {
-					// headノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
-				}
+			node*                                   p_expect_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			rc::stickey_counter_try_increment_guard expect_head_rc_g( p_expect_head_node->rc_ );
+			if ( !expect_head_rc_g.owns_rc() ) {
+				continue;   // headノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
+			}
+			if ( p_expect_head_node != ap_que_head_.load( /*std::memory_order_acquire*/ ) ) {
+				continue;   // headノードが変化していたので、再度やり直す。
 			}
 
-			rc::stickey_counter_try_increment_guard expect_tail_rc_g;
-			node*                                   p_expect_tail_node                = nullptr;
-			bool                                    is_success_tail_node_rc_increment = false;
-			while ( true ) {
-				p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
-				expect_tail_rc_g   = rc::stickey_counter_try_increment_guard( p_expect_tail_node->rc_ );
-				if ( expect_tail_rc_g.owns_rc() ) {
-					node* p_chk_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_tail_node == p_chk_tail_node ) {
-						is_success_tail_node_rc_increment = true;
-						break;
-					}
-					// tailノードが変化していたので、再度やり直す。
-				} else {
-					// tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
-					break;
-				}
+			node*                                   p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			rc::stickey_counter_try_increment_guard expect_tail_rc_g( p_expect_tail_node->rc_ );
+			if ( !expect_tail_rc_g.owns_rc() ) {
+				continue;   // tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
 			}
-			if ( !is_success_tail_node_rc_increment ) {
-				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
-				continue;
+			if ( p_expect_tail_node != ap_que_tail_.load( /*std::memory_order_acquire*/ ) ) {
+				continue;   // tailノードが変化していたので、再度やり直す。
 			}
 
-			rc::stickey_counter_try_increment_guard expect_next_rc_g;
-			node*                                   p_expect_next_node                = nullptr;
-			bool                                    is_success_next_node_rc_increment = false;
-			while ( true ) {
-				p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
-				if ( p_expect_next_node == nullptr ) {
-					return nullptr;   // 本当に空っぽだったので、popを終了する。
-				}
-
-				expect_next_rc_g = rc::stickey_counter_try_increment_guard( p_expect_next_node->rc_ );
-				if ( expect_next_rc_g.owns_rc() ) {
-					node* p_chk_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
-					if ( p_expect_next_node == p_chk_next_node ) {
-						is_success_next_node_rc_increment = true;
-						break;
-					}
-					// nextノードが変化していたので、nextノードに対するリファレンスカウンタ取得をやり直す。
-				} else {
-					// nextノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
-					break;
-				}
+			node* p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
+			if ( p_expect_next_node == nullptr ) {
+				return nullptr;   // 本当に空っぽだったので、popを終了する。
 			}
-			if ( !is_success_next_node_rc_increment ) {
-				// nextノードの参照カウンタのインクリメントに失敗したので、最初からやり直す。
-				continue;
+			rc::stickey_counter_try_increment_guard expect_next_rc_g( p_expect_next_node->rc_ );
+			if ( !expect_next_rc_g.owns_rc() ) {
+				continue;   // nextノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
+			}
+			if ( p_expect_next_node != p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ ) ) {
+				continue;   // nextノードが変化していたので、nextノードに対するリファレンスカウンタ取得をやり直す。
 			}
 
 			// ここに到達した時点で、p_expect_head_node, p_expect_tail_node, p_expect_next_nodeはnullptrでないことが保証されている。
 			if ( p_expect_head_node == p_expect_tail_node ) {
 				// queueが空かもしれないが、tailの更新が遅れているだけかもしれない
 				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
-				// tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
-			} else {
-				if ( ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
-					// headが獲得できたので、nextの保存されている値情報を取り出す。
-					// もともとのアルゴリズムでは、このv_の読み出しは、ap_que_head_.compare_exchange_strong()前で行っている。
-					// これは、ABA問題を避けるために先行読み出しを行う必要があったから、そのように実装されている。
-					// しかし、一方でその実装だと、Thread Sanitizerがレースコンディションのエラーを指摘してくる。
-					// Thread Sanitizerの指摘を避けるためには、ABA問題を避けつつ、ap_que_head_.compare_exchange_strong()の後に読み出す必要がある。
-					// これを実現するには、p_expect_next_nodeに対してのABA問題を避けるために、ハザードポインタを用いる方法が基本である。
-					// この実装では、ハザードポインタの代わりにリファレンスカウンタを用いるので、p_expect_next_nodeに対してリファレンスカウンタを
-					// 適用し、p_expect_next_nodeに対してのABA問題を避ける方策を採った。
-					if constexpr ( std::is_move_constructible<T>::value ) {
-						popped_value = std::optional<T>( std::move( p_expect_next_node->v_ ) );
-					} else {
-						popped_value = std::optional<T>( p_expect_next_node->v_ );
-					}
-					p_expect_next_node->destruct_value();   // moveしたので、nodeが保持する値のデストラクトを行う。
-
-					return p_expect_head_node;
-				} else {
-					// headの獲得に失敗したので、最初からやり直す。
-				}
+				continue;   // tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
 			}
+			if ( !ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
+				continue;   // headの獲得に失敗したので、最初からやり直す。
+			}
+
+			// headが獲得できたので、nextの保存されている値情報を取り出す。
+			// もともとのアルゴリズムでは、このv_の読み出しは、ap_que_head_.compare_exchange_strong()前で行っている。
+			// これは、ABA問題を避けるために先行読み出しを行う必要があったから、そのように実装されている。
+			// しかし、一方でその実装だと、Thread Sanitizerがレースコンディションのエラーを指摘してくる。
+			// Thread Sanitizerの指摘を避けるためには、ABA問題を避けつつ、ap_que_head_.compare_exchange_strong()の後に読み出す必要がある。
+			// これを実現するには、p_expect_next_nodeに対してのABA問題を避けるために、ハザードポインタを用いる方法が基本である。
+			// この実装では、ハザードポインタの代わりにリファレンスカウンタを用いるので、p_expect_next_nodeに対してリファレンスカウンタを
+			// 適用し、p_expect_next_nodeに対してのABA問題を避ける方策を採った。
+			if constexpr ( std::is_move_constructible<T>::value ) {
+				popped_value = std::optional<T>( std::move( p_expect_next_node->v_ ) );
+			} else {
+				popped_value = std::optional<T>( p_expect_next_node->v_ );
+			}
+			p_expect_next_node->destruct_value();   // moveしたので、nodeが保持する値のデストラクトを行う。
+			return p_expect_head_node;
 		}
 	}
 
