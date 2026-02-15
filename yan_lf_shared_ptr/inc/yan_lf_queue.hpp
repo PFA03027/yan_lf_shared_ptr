@@ -30,7 +30,7 @@ namespace yan {   // yet another
  *
  * @tparam T
  */
-template <typename T, typename Alloc = std::allocator<T>>
+template <typename T, typename Alloc = std::allocator<T>, bool ApplyOptimizedMemoryOrder = false>
 class rc_lf_queue {
 public:
 	using value_type     = T;
@@ -104,9 +104,9 @@ public:
 
 private:
 	struct node {
-		rc::basic_sticky_counter<uint64_t, true> rc_;                 // このノードを参照しているスレッド数を示すreference counter
-		std::atomic<node*>                       ap_next_;            // 次のノードへのポインタ
-		node*                                    p_next_in_retire_;   // retire内での次のノードへのポインタ
+		rc::basic_sticky_counter<uint64_t, ApplyOptimizedMemoryOrder> rc_;                 // このノードを参照しているスレッド数を示すreference counter
+		std::atomic<node*>                                            ap_next_;            // 次のノードへのポインタ
+		node*                                                         p_next_in_retire_;   // retire内での次のノードへのポインタ
 
 		union {
 			T       v_;
@@ -439,30 +439,30 @@ private:
 	void push_impl( node* p_pushed_new_tail )
 	{
 		while ( true ) {
-			node*                                   p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			node*                                   p_expect_tail_node = ap_que_tail_.load( load_memory_order() );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 			rc::stickey_counter_try_increment_guard expect_tail_rc_g( p_expect_tail_node->rc_ );
 			if ( !expect_tail_rc_g.owns_rc() ) {
 				continue;   // tailノードの参照カウンタが０に到達済みなので、すでに、pop済みで他のスレッドが解放処理中かもしれない。最初からやり直す。
 			}
-			if ( p_expect_tail_node != ap_que_tail_.load( /*std::memory_order_acquire*/ ) ) {
+			if ( p_expect_tail_node != ap_que_tail_.load( load_memory_order() ) ) {
 				continue;   // tailノードが変化していたので、再度やり直す。
 			}
 
-			node* p_next_node = p_expect_tail_node->ap_next_.load( /*std::memory_order_acquire*/ );
+			node* p_next_node = p_expect_tail_node->ap_next_.load( load_memory_order() );
 			if ( p_next_node != nullptr ) {
 				// p_expect_tail_nodeが終端ノードを指していなかったので、tailを更新してから、最初からやり直す
-				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_next_node );
+				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_next_node, cae_memory_order() );
 				continue;
 			}
 
 			// 終端ノードのはず。終端ノードへの追加を試みる
-			bool ret = p_expect_tail_node->ap_next_.compare_exchange_strong( p_next_node, p_pushed_new_tail );
+			bool ret = p_expect_tail_node->ap_next_.compare_exchange_strong( p_next_node, p_pushed_new_tail, cae_memory_order() );
 			if ( !ret ) {
 				continue;   // 終端ノードへの追加に失敗したので、最初からやり直す。
 			}
 
 			// 終端ノードの後ろへの追加に成功。tailの更新を試みる。
-			ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_pushed_new_tail );
+			ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_pushed_new_tail, cae_memory_order() );
 			break;   // 更新処理完了、ループを抜ける。なお、更新に失敗しても、他のスレッドが頑張ってくれるから、気にしない。
 		}
 
@@ -472,25 +472,25 @@ private:
 	node* try_pop_impl( std::optional<T>& popped_value )
 	{
 		while ( true ) {
-			node*                                   p_expect_head_node = ap_que_head_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			node*                                   p_expect_head_node = ap_que_head_.load( load_memory_order() );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 			rc::stickey_counter_try_increment_guard expect_head_rc_g( p_expect_head_node->rc_ );
 			if ( !expect_head_rc_g.owns_rc() ) {
 				continue;   // headノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。最初からやり直す。
 			}
-			if ( p_expect_head_node != ap_que_head_.load( /*std::memory_order_acquire*/ ) ) {
+			if ( p_expect_head_node != ap_que_head_.load( load_memory_order() ) ) {
 				continue;   // headノードが変化していたので、再度やり直す。
 			}
 
-			node*                                   p_expect_tail_node = ap_que_tail_.load( /*std::memory_order_acquire*/ );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
+			node*                                   p_expect_tail_node = ap_que_tail_.load( load_memory_order() );   // 番兵ノードが必ず存在する構造なので、nullptrチェックは不要
 			rc::stickey_counter_try_increment_guard expect_tail_rc_g( p_expect_tail_node->rc_ );
 			if ( !expect_tail_rc_g.owns_rc() ) {
 				continue;   // tailノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
 			}
-			if ( p_expect_tail_node != ap_que_tail_.load( /*std::memory_order_acquire*/ ) ) {
+			if ( p_expect_tail_node != ap_que_tail_.load( load_memory_order() ) ) {
 				continue;   // tailノードが変化していたので、再度やり直す。
 			}
 
-			node* p_expect_next_node = p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ );
+			node* p_expect_next_node = p_expect_head_node->ap_next_.load( load_memory_order() );
 			if ( p_expect_next_node == nullptr ) {
 				return nullptr;   // 本当に空っぽだったので、popを終了する。
 			}
@@ -498,17 +498,17 @@ private:
 			if ( !expect_next_rc_g.owns_rc() ) {
 				continue;   // nextノードの参照カウンタが０に到達済みなので、他のスレッドが解放処理中かもしれない。headの取得からやり直す。
 			}
-			if ( p_expect_next_node != p_expect_head_node->ap_next_.load( /*std::memory_order_acquire*/ ) ) {
+			if ( p_expect_next_node != p_expect_head_node->ap_next_.load( load_memory_order() ) ) {
 				continue;   // nextノードが変化していたので、nextノードに対するリファレンスカウンタ取得をやり直す。
 			}
 
 			// ここに到達した時点で、p_expect_head_node, p_expect_tail_node, p_expect_next_nodeはnullptrでないことが保証されている。
 			if ( p_expect_head_node == p_expect_tail_node ) {
 				// queueが空かもしれないが、tailの更新が遅れているだけかもしれない
-				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node );
+				ap_que_tail_.compare_exchange_strong( p_expect_tail_node, p_expect_next_node, cae_memory_order() );
 				continue;   // tailの更新を試みる。成否は気にない。そのあと、最初からやり直す。
 			}
-			if ( !ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node ) ) {
+			if ( !ap_que_head_.compare_exchange_strong( p_expect_head_node, p_expect_next_node, cae_memory_order() ) ) {
 				continue;   // headの獲得に失敗したので、最初からやり直す。
 			}
 
@@ -583,6 +583,11 @@ private:
 			return;
 		}
 
+		// 以下の実装は、スレッドローカルなリタイアノードリストにノードが滞留しないよう、
+		// node*をフリーノードリスト、あるいは、スレッド間で共有しているプライマリリタイアノードリストに集まる傾向となるように実装する。
+		// こうすることで、スレッド毎に偏ったpushやpopの使い方をされても、node*の再利用が可能となり、node*のアロケート数を抑制できる。
+		// また、node*のガベージコレクションを効果的に機能させる動作の実装が可能となる。
+
 		node* p_fc_node = nullptr;
 		bool  dec_ret   = p->rc_.decrement_then_is_zero();   // 参照カウンタをデクリメントする。この操作はallocate_node()で初期値として割り当てられているカウンタ１を相殺するためのもの。
 		if ( dec_ret ) {
@@ -622,6 +627,21 @@ private:
 		node_allocator_traits_type::deallocate( node_allocator, p, 1 );
 	}
 
+	static inline constexpr std::memory_order load_memory_order( void )
+	{
+		return ApplyOptimizedMemoryOrder ? std::memory_order_acquire : std::memory_order_seq_cst;
+	}
+
+	static inline constexpr std::memory_order store_memory_order( void )
+	{
+		return ApplyOptimizedMemoryOrder ? std::memory_order_release : std::memory_order_seq_cst;
+	}
+
+	static inline constexpr std::memory_order cae_memory_order( void )
+	{
+		return ApplyOptimizedMemoryOrder ? std::memory_order_acq_rel : std::memory_order_seq_cst;
+	}
+
 	std::atomic<node*> ap_que_head_;
 	std::atomic<node*> ap_que_tail_;
 
@@ -630,12 +650,12 @@ private:
 	static thread_local tl_retired_node_list tl_retire_node_list_;         //!< thread-local variable to hold retired mgr_info_type elements
 };
 
-template <typename T, typename Alloc>
-constinit rc_lf_queue<T, Alloc>::mutex_retired_node_list rc_lf_queue<T, Alloc>::primary_retired_node_list_;   //!< primary retired elements list
-template <typename T, typename Alloc>
-constinit rc_lf_queue<T, Alloc>::mutex_free_node_list rc_lf_queue<T, Alloc>::free_node_list_;   //!< mutex-free list to hold free nodes
-template <typename T, typename Alloc>
-constinit thread_local rc_lf_queue<T, Alloc>::tl_retired_node_list rc_lf_queue<T, Alloc>::tl_retire_node_list_;   //!< thread-local variable to hold retired mgr_info_type elements
+template <typename T, typename Alloc, bool ApplyOptimizedMemoryOrder>
+constinit rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::mutex_retired_node_list rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::primary_retired_node_list_;   //!< primary retired elements list
+template <typename T, typename Alloc, bool ApplyOptimizedMemoryOrder>
+constinit rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::mutex_free_node_list rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::free_node_list_;   //!< mutex-free list to hold free nodes
+template <typename T, typename Alloc, bool ApplyOptimizedMemoryOrder>
+constinit thread_local rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::tl_retired_node_list rc_lf_queue<T, Alloc, ApplyOptimizedMemoryOrder>::tl_retire_node_list_;   //!< thread-local variable to hold retired mgr_info_type elements
 
 }   // namespace yan
 

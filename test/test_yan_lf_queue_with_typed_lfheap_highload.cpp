@@ -85,8 +85,10 @@ protected:
 typedef ::testing::Types<
 	MutexQueue<size_t>,
 	MutexQueue<size_t, lfheap::typed_pool_heap<size_t>>,
-	yan::rc_lf_queue<size_t>,
-	yan::rc_lf_queue<size_t, lfheap::typed_pool_heap<size_t>>>
+	yan::rc_lf_queue<size_t, std::allocator<size_t>, false>,
+	yan::rc_lf_queue<size_t, std::allocator<size_t>, true>,
+	yan::rc_lf_queue<size_t, lfheap::typed_pool_heap<size_t>, false>,
+	yan::rc_lf_queue<size_t, lfheap::typed_pool_heap<size_t>, true>>
 	MyQueTypes;
 TYPED_TEST_CASE( TestYanRcLfQueueWithLFAllocHighload, MyQueTypes );
 
