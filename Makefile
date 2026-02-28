@@ -24,16 +24,15 @@ BUILD_TYPE?=Release
 BUILD_SHARED_LIBS?=ON
 
 # Sanitizer test option:
-# SANITIZER_TYPE= 1 ~ 20 or ""
+# SANITIZER_TYPE= 1 ~ 5 or ""
 #
 # Please see common.cmake for detail
 # 
 SANITIZER_TYPE?=
 
+#############################################################################################
 ##### internal variable
 BUILD_DIR?=build
-#MAKEFILE_DIR := $(dir $(lastword $(MAKEFILE_LIST)))	# 相対パス名を得るならこちら。
-MAKEFILE_DIR := $(dir $(abspath $(lastword $(MAKEFILE_LIST))))	# 絶対パス名を得るならこちら。
 
 CPUS=$(shell grep cpu.cores /proc/cpuinfo | sort -u | sed 's/[^0-9]//g')
 JOBS=$(shell expr ${CPUS} + ${CPUS} / 2)
@@ -44,6 +43,7 @@ CMAKE_CONFIGURE_OPTS += -DBUILD_CONFIG=${BUILD_CONFIG}
 CMAKE_CONFIGURE_OPTS += -DSANITIZER_TYPE=${SANITIZER_TYPE}
 CMAKE_CONFIGURE_OPTS += -DBUILD_SHARED_LIBS=${BUILD_SHARED_LIBS}
 
+#############################################################################################
 all: configure-cmake
 	cmake --build ${BUILD_DIR} -j ${JOBS} -v --target all
 
@@ -70,8 +70,8 @@ coverage: clean
 	set -e; \
 	make BUILD_CONFIG=codecoverage BUILD_TYPE=Debug test;  \
 	cd ${BUILD_DIR}; \
-	lcov -c -d . --include 'inc/*' --branch-coverage -o tmp.info; \
-	genhtml --branch-coverage -o OUTPUT -p . -f tmp.info
+	lcov --rc branch_coverage=1 --rc geninfo_unexecuted_blocks=1 --ignore-errors negative --ignore-errors mismatch -c -d . --include '*/yan_lf_shared_ptr/inc/*' -o output.info; \
+	genhtml --branch-coverage -o OUTPUT -p . -f output.info
 
 profile: clean
 	-rm -f ${BUILD_DIR}/gmon.out
